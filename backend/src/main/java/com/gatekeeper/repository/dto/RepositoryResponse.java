@@ -1,7 +1,7 @@
 package com.gatekeeper.repository.dto;
 
 import com.gatekeeper.repository.Repository;
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 public record RepositoryResponse(
         Long id,
@@ -9,8 +9,8 @@ public record RepositoryResponse(
         String fullName,
         String description,
         boolean active,
-        OffsetDateTime createdAt,
-        OffsetDateTime updatedAt) {
+        Instant createdAt,
+        Instant updatedAt) {
 
     public static RepositoryResponse from(Repository repository) {
         return new RepositoryResponse(

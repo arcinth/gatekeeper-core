@@ -6,7 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.springframework.data.annotation.CreatedDate;
@@ -23,11 +23,21 @@ public abstract class BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /*
+     * Instant, not OffsetDateTime: Spring Data Commons' default auditing
+     * DateTimeProvider hands @CreatedDate/@LastModifiedDate a LocalDateTime,
+     * and its DefaultAuditableBeanWrapperFactory only knows how to convert
+     * that into LocalDateTime/LocalDate/LocalTime/Instant/Date/Long -
+     * OffsetDateTime is not in that list and fails at the first insert with
+     * "Cannot convert unsupported date type". Both map to Postgres'
+     * timestamptz identically, so this costs nothing and matches the type
+     * RefreshToken.createdAt already used.
+     */
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
+    private Instant createdAt;
 
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    private Instant updatedAt;
 }

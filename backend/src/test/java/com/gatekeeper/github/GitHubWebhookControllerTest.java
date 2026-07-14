@@ -3,6 +3,7 @@ package com.gatekeeper.github;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -48,6 +49,9 @@ class GitHubWebhookControllerTest {
     private WebhookSignatureVerifier webhookSignatureVerifier;
 
     @MockBean
+    private GitHubEventRouter gitHubEventRouter;
+
+    @MockBean
     private JwtService jwtService;
 
     @MockBean
@@ -64,6 +68,7 @@ class GitHubWebhookControllerTest {
                 .andExpect(status().isOk());
 
         verify(webhookSignatureVerifier).verify(any(byte[].class), eq("sha256=irrelevant-because-verifier-is-mocked"));
+        verify(gitHubEventRouter).route(eq("pull_request"), any(byte[].class), eq("delivery-1"));
     }
 
     @Test
@@ -79,6 +84,8 @@ class GitHubWebhookControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("GK-401"));
+
+        verify(gitHubEventRouter, never()).route(any(), any(byte[].class), any());
     }
 
     @Test

@@ -1,7 +1,7 @@
 package com.gatekeeper.user.dto;
 
 import com.gatekeeper.user.User;
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 public record UserResponse(
         Long id,
@@ -9,7 +9,7 @@ public record UserResponse(
         String fullName,
         String roleName,
         boolean enabled,
-        OffsetDateTime createdAt) {
+        Instant createdAt) {
 
     public static UserResponse from(User user) {
         return new UserResponse(

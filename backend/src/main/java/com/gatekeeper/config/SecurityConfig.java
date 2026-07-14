@@ -67,6 +67,9 @@ public class SecurityConfig {
                         .accessDeniedHandler(jwtAccessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        // GitHub cannot present our JWT - WebhookSignatureVerifier is this
+                        // endpoint's authentication mechanism instead (see GitHubWebhookController).
+                        .requestMatchers("/api/v1/github/webhook").permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",

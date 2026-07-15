@@ -7,10 +7,14 @@ import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.policy.PolicySeverity;
 import com.gatekeeper.policyfinding.PolicyFindingRepository;
 import com.gatekeeper.pullrequest.PullRequest;
+import com.gatekeeper.securityengine.SecuritySeverity;
+import com.gatekeeper.securityfinding.SecurityFindingRepository;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -31,6 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
  * to this same service rather than a parallel query service, since this class
  * already mixes read (findByIdOrThrow) and write methods under one
  * transactional policy - see Milestone 5 Architecture, Section 7 / ADR-020.
+ * Sprint 3 Milestone 3 extends both read methods to also enrich with Security
+ * Engine findings, mirroring the Policy enrichment exactly rather than
+ * introducing a parallel query path.
  */
 @Service
 @RequiredArgsConstructor
@@ -41,6 +48,7 @@ public class AnalysisRunService {
 
     private final AnalysisRunRepository analysisRunRepository;
     private final PolicyFindingRepository policyFindingRepository;
+    private final SecurityFindingRepository securityFindingRepository;
 
     @Transactional
     public AnalysisRun createIfAbsent(PullRequest pullRequest, String commitSha, AnalysisRunTriggerReason triggerReason) {
@@ -62,8 +70,13 @@ public class AnalysisRunService {
      */
     public Page<AnalysisRunSummaryResponse> findSummaryPage(AnalysisRunFilter filter, Pageable pageable) {
         Page<AnalysisRun> page = analysisRunRepository.findAll(AnalysisRunSpecifications.matching(filter), pageable);
-        Map<Long, Long> findingsTotals = findingsTotalsByAnalysisRunId(page.getContent());
-        return page.map(run -> AnalysisRunSummaryResponse.from(run, findingsTotals.getOrDefault(run.getId(), 0L)));
+        List<Long> ids = page.getContent().stream().map(AnalysisRun::getId).toList();
+        Map<Long, Long> findingsTotals = countsByAnalysisRunId(ids, policyFindingRepository::countByAnalysisRunIdIn);
+        Map<Long, Long> securityFindingsTotals =
+                countsByAnalysisRunId(ids, securityFindingRepository::countByAnalysisRunIdIn);
+        return page.map(run -> AnalysisRunSummaryResponse.from(run,
+                findingsTotals.getOrDefault(run.getId(), 0L),
+                securityFindingsTotals.getOrDefault(run.getId(), 0L)));
     }
 
     public AnalysisRunDetailResponse findDetailByIdOrThrow(Long analysisRunId) {
@@ -73,16 +86,26 @@ public class AnalysisRunService {
         for (Object[] row : policyFindingRepository.countBySeverityForAnalysisRun(analysisRunId)) {
             findingsBySeverity.put((PolicySeverity) row[0], (Long) row[1]);
         }
-        return AnalysisRunDetailResponse.from(run, findingsBySeverity);
+        Map<SecuritySeverity, Long> securityFindingsBySeverity = new EnumMap<>(SecuritySeverity.class);
+        for (Object[] row : securityFindingRepository.countBySeverityForAnalysisRun(analysisRunId)) {
+            securityFindingsBySeverity.put((SecuritySeverity) row[0], (Long) row[1]);
+        }
+        return AnalysisRunDetailResponse.from(run, findingsBySeverity, securityFindingsBySeverity);
     }
 
-    private Map<Long, Long> findingsTotalsByAnalysisRunId(List<AnalysisRun> runs) {
-        if (runs.isEmpty()) {
+    /**
+     * Skips calling the batch-count query entirely for an empty page, rather
+     * than issuing an "IN ()" query - the same guard both the Policy and
+     * Security batch-count call sites needed, now shared by them here. The
+     * query itself is passed as a function so the guard applies before either
+     * repository is actually invoked, not just before its result is used.
+     */
+    private Map<Long, Long> countsByAnalysisRunId(List<Long> ids, Function<Collection<Long>, List<Object[]>> countQuery) {
+        if (ids.isEmpty()) {
             return Map.of();
         }
-        List<Long> ids = runs.stream().map(AnalysisRun::getId).toList();
         Map<Long, Long> totals = new HashMap<>();
-        for (Object[] row : policyFindingRepository.countByAnalysisRunIdIn(ids)) {
+        for (Object[] row : countQuery.apply(ids)) {
             totals.put((Long) row[0], (Long) row[1]);
         }
         return totals;
@@ -109,7 +132,7 @@ public class AnalysisRunService {
         return analysisRunRepository.save(run);
     }
 
-    /** Entity-in: called by PolicyFindingPersistenceService within the same transaction it loaded the run in. */
+    /** Entity-in: called by AnalysisResultPersistenceService within the same transaction it loaded the run in. */
     @Transactional
     public void markCompleted(AnalysisRun run) {
         run.setStatus(AnalysisRunStatus.COMPLETED);

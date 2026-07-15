@@ -12,6 +12,8 @@ import com.gatekeeper.analysisrun.AnalysisRunStatus;
 import com.gatekeeper.config.SecurityConfig;
 import com.gatekeeper.policy.PolicyCategory;
 import com.gatekeeper.policy.PolicySeverity;
+import com.gatekeeper.securityengine.SecurityCategory;
+import com.gatekeeper.securityengine.SecuritySeverity;
 import com.gatekeeper.security.CustomUserDetailsService;
 import com.gatekeeper.security.JwtAccessDeniedHandler;
 import com.gatekeeper.security.JwtAuthenticationEntryPoint;
@@ -65,14 +67,18 @@ class DashboardControllerTest {
                 Map.of(AnalysisRunStatus.COMPLETED, 10L, AnalysisRunStatus.FAILED, 2L),
                 7L,
                 Map.of(PolicySeverity.LOW, 5L, PolicySeverity.MEDIUM, 2L),
-                Map.of(PolicyCategory.MAINTAINABILITY, 5L, PolicyCategory.CODE_QUALITY, 2L));
+                Map.of(PolicyCategory.MAINTAINABILITY, 5L, PolicyCategory.CODE_QUALITY, 2L),
+                3L,
+                Map.of(SecuritySeverity.CRITICAL, 1L, SecuritySeverity.HIGH, 2L),
+                Map.of(SecurityCategory.SECRETS_EXPOSURE, 1L, SecurityCategory.INSECURE_CRYPTOGRAPHY, 2L));
         when(dashboardAggregationService.getOverview(any())).thenReturn(overview);
 
         mockMvc.perform(get("/api/v1/dashboard/overview").header("Authorization", "Bearer test-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalAnalysisRuns").value(12))
                 .andExpect(jsonPath("$.data.totalFindings").value(7))
-                .andExpect(jsonPath("$.data.windowDays").value(30));
+                .andExpect(jsonPath("$.data.windowDays").value(30))
+                .andExpect(jsonPath("$.data.totalSecurityFindings").value(3));
     }
 
     @Test

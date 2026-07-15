@@ -6,6 +6,9 @@ import com.gatekeeper.policy.PolicyCategory;
 import com.gatekeeper.policy.PolicySeverity;
 import com.gatekeeper.policyfinding.PolicyFindingRepository;
 import com.gatekeeper.repository.RepositoryRepository;
+import com.gatekeeper.securityengine.SecurityCategory;
+import com.gatekeeper.securityengine.SecuritySeverity;
+import com.gatekeeper.securityfinding.SecurityFindingRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumMap;
@@ -16,11 +19,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Backs GET /api/v1/dashboard/overview - the endpoint DashboardController's
- * original Javadoc deferred until Analysis Runs and Findings existed to
- * aggregate (Milestone 5 Architecture, Section 1). Every count is computed by
- * a dedicated GROUP BY repository query, never by fetching rows and counting
- * them in the JVM (Section 10).
+ * Backs GET /api/v1/dashboard/overview. Extended for Security Findings
+ * (Security Engine Architecture, Section 14) alongside the existing Policy
+ * aggregation - every new count is computed by the same kind of dedicated
+ * GROUP BY repository query as Policy's, never fetched-and-counted in the JVM.
  */
 @Service
 @RequiredArgsConstructor
@@ -31,6 +33,7 @@ public class DashboardAggregationService {
 
     private final AnalysisRunRepository analysisRunRepository;
     private final PolicyFindingRepository policyFindingRepository;
+    private final SecurityFindingRepository securityFindingRepository;
     private final RepositoryRepository repositoryRepository;
 
     public DashboardOverviewResponse getOverview(Integer windowDays) {
@@ -45,6 +48,10 @@ public class DashboardAggregationService {
                 toEnumCountMap(policyFindingRepository.countBySeveritySince(since), PolicySeverity.class);
         Map<PolicyCategory, Long> findingsByCategory =
                 toEnumCountMap(policyFindingRepository.countByCategorySince(since), PolicyCategory.class);
+        Map<SecuritySeverity, Long> securityFindingsBySeverity =
+                toEnumCountMap(securityFindingRepository.countBySeveritySince(since), SecuritySeverity.class);
+        Map<SecurityCategory, Long> securityFindingsByCategory =
+                toEnumCountMap(securityFindingRepository.countByCategorySince(since), SecurityCategory.class);
 
         return new DashboardOverviewResponse(
                 effectiveWindowDays,
@@ -53,7 +60,10 @@ public class DashboardAggregationService {
                 runsByStatus,
                 sum(findingsBySeverity),
                 findingsBySeverity,
-                findingsByCategory);
+                findingsByCategory,
+                sum(securityFindingsBySeverity),
+                securityFindingsBySeverity,
+                securityFindingsByCategory);
     }
 
     @SuppressWarnings("unchecked")

@@ -1,5 +1,6 @@
 import type { AnalysisRunStatus } from './analysisRun'
 import type { PolicyCategory, PolicySeverity } from './policyFinding'
+import type { SecurityCategory, SecuritySeverity } from './securityFinding'
 
 export interface DashboardStatus {
   status: string
@@ -14,4 +15,7 @@ export interface DashboardOverview {
   totalFindings: number
   findingsBySeverity: Partial<Record<PolicySeverity, number>>
   findingsByCategory: Partial<Record<PolicyCategory, number>>
+  totalSecurityFindings: number
+  securityFindingsBySeverity: Partial<Record<SecuritySeverity, number>>
+  securityFindingsByCategory: Partial<Record<SecurityCategory, number>>
 }

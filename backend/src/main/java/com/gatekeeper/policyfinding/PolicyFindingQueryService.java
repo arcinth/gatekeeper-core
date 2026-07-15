@@ -14,13 +14,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Read side for PolicyFindingEntity (Milestone 5 Architecture, Section 7).
- * Introduced as a new, standalone service rather than added to
- * PolicyFindingPersistenceService: that service exists purely to work around
- * the Spring AOP self-invocation pitfall from Milestone 4 (see its own
- * Javadoc) and adding an unrelated read concern to it would muddy that
- * documented, narrow purpose - see ADR-020 for why AnalysisRunService's reads
- * were extended in place instead, the opposite choice for a similar-looking
- * question.
+ * Introduced as a new, standalone service rather than added to the
+ * write-side persistence service (originally PolicyFindingPersistenceService,
+ * superseded by com.gatekeeper.orchestration.AnalysisResultPersistenceService
+ * as of Sprint 3 Milestone 2 / ADR-025): that service exists purely to work
+ * around the Spring AOP self-invocation pitfall from Milestone 4, and adding
+ * an unrelated read concern to it would muddy that documented, narrow purpose
+ * - see ADR-020 for why AnalysisRunService's reads were extended in place
+ * instead, the opposite choice for a similar-looking question.
  */
 @Service
 @RequiredArgsConstructor

@@ -4,8 +4,10 @@ import { AppLayout } from '../layouts/AppLayout'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { analysisRunService } from '../services/analysisRunService'
 import { policyFindingService } from '../services/policyFindingService'
+import { securityFindingService } from '../services/securityFindingService'
 import type { AnalysisRunDetail } from '../types/analysisRun'
 import type { PolicyFinding } from '../types/policyFinding'
+import type { SecurityFinding } from '../types/securityFinding'
 
 const SEVERITY_STYLES: Record<string, string> = {
   LOW: 'bg-slate-100 text-slate-700',
@@ -18,6 +20,7 @@ export function AnalysisRunDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [run, setRun] = useState<AnalysisRunDetail | null>(null)
   const [findings, setFindings] = useState<PolicyFinding[]>([])
+  const [securityFindings, setSecurityFindings] = useState<SecurityFinding[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -28,10 +31,12 @@ export function AnalysisRunDetailPage() {
     Promise.all([
       analysisRunService.getById(Number(id)),
       policyFindingService.list({ analysisRunId: Number(id), sort: 'severity,desc', size: 100 }),
+      securityFindingService.list({ analysisRunId: Number(id), sort: 'severity,desc', size: 100 }),
     ])
-      .then(([runDetail, findingsPage]) => {
+      .then(([runDetail, findingsPage, securityFindingsPage]) => {
         setRun(runDetail)
         setFindings(findingsPage.content)
+        setSecurityFindings(securityFindingsPage.content)
       })
       .finally(() => setIsLoading(false))
   }, [id])
@@ -79,7 +84,8 @@ export function AnalysisRunDetailPage() {
         </div>
       )}
 
-      <div className="mb-6 flex gap-3">
+      <h2 className="mb-2 text-lg font-semibold text-slate-900">Policy Findings</h2>
+      <div className="mb-3 flex gap-3">
         {Object.entries(run.findingsBySeverity).map(([severity, count]) => (
           <span
             key={severity}
@@ -89,45 +95,68 @@ export function AnalysisRunDetailPage() {
           </span>
         ))}
       </div>
+      <FindingsTable findings={findings} emptyMessage="No policy findings for this run." />
 
-      <h2 className="mb-3 text-lg font-semibold text-slate-900">Findings</h2>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-2">Severity</th>
-              <th className="px-4 py-2">Rule</th>
-              <th className="px-4 py-2">Location</th>
-              <th className="px-4 py-2">Message</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {findings.length ? (
-              findings.map((finding) => (
-                <tr key={finding.id}>
-                  <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${SEVERITY_STYLES[finding.severity]}`}>
-                      {finding.severity}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-slate-700">{finding.ruleId}</td>
-                  <td className="px-4 py-2 text-slate-500">
-                    {finding.filePath}:{finding.lineNumber}
-                  </td>
-                  <td className="px-4 py-2 text-slate-700">{finding.message}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
-                  No findings for this run.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <h2 className="mb-2 mt-8 text-lg font-semibold text-slate-900">Security Findings</h2>
+      <div className="mb-3 flex gap-3">
+        {Object.entries(run.securityFindingsBySeverity).map(([severity, count]) => (
+          <span
+            key={severity}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${SEVERITY_STYLES[severity] ?? 'bg-slate-100 text-slate-700'}`}
+          >
+            {severity}: {count}
+          </span>
+        ))}
       </div>
+      <FindingsTable findings={securityFindings} emptyMessage="No security findings for this run." />
     </AppLayout>
+  )
+}
+
+function FindingsTable({
+  findings,
+  emptyMessage,
+}: {
+  findings: (PolicyFinding | SecurityFinding)[]
+  emptyMessage: string
+}) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+      <table className="min-w-full divide-y divide-slate-200 text-sm">
+        <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="px-4 py-2">Severity</th>
+            <th className="px-4 py-2">Rule</th>
+            <th className="px-4 py-2">Location</th>
+            <th className="px-4 py-2">Message</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {findings.length ? (
+            findings.map((finding) => (
+              <tr key={finding.id}>
+                <td className="px-4 py-2">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${SEVERITY_STYLES[finding.severity]}`}>
+                    {finding.severity}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-slate-700">{finding.ruleId}</td>
+                <td className="px-4 py-2 text-slate-500">
+                  {finding.filePath}:{finding.lineNumber}
+                </td>
+                <td className="px-4 py-2 text-slate-700">{finding.message}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
+                {emptyMessage}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

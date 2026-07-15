@@ -11,6 +11,9 @@ import com.gatekeeper.policy.PolicyCategory;
 import com.gatekeeper.policy.PolicySeverity;
 import com.gatekeeper.policyfinding.PolicyFindingRepository;
 import com.gatekeeper.repository.RepositoryRepository;
+import com.gatekeeper.securityengine.SecurityCategory;
+import com.gatekeeper.securityengine.SecuritySeverity;
+import com.gatekeeper.securityfinding.SecurityFindingRepository;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -18,12 +21,13 @@ class DashboardAggregationServiceTest {
 
     private final AnalysisRunRepository analysisRunRepository = mock(AnalysisRunRepository.class);
     private final PolicyFindingRepository policyFindingRepository = mock(PolicyFindingRepository.class);
+    private final SecurityFindingRepository securityFindingRepository = mock(SecurityFindingRepository.class);
     private final RepositoryRepository repositoryRepository = mock(RepositoryRepository.class);
-    private final DashboardAggregationService service =
-            new DashboardAggregationService(analysisRunRepository, policyFindingRepository, repositoryRepository);
+    private final DashboardAggregationService service = new DashboardAggregationService(
+            analysisRunRepository, policyFindingRepository, securityFindingRepository, repositoryRepository);
 
     @Test
-    void getOverview_assemblesCountsFromEachAggregateQuery() {
+    void getOverview_assemblesCountsFromEachAggregateQueryIncludingSecurityFindings() {
         when(repositoryRepository.count()).thenReturn(5L);
         when(analysisRunRepository.countByStatusSince(any())).thenReturn(List.of(
                 new Object[] {AnalysisRunStatus.COMPLETED, 10L},
@@ -34,6 +38,12 @@ class DashboardAggregationServiceTest {
         when(policyFindingRepository.countByCategorySince(any())).thenReturn(List.of(
                 new Object[] {PolicyCategory.MAINTAINABILITY, 5L},
                 new Object[] {PolicyCategory.CODE_QUALITY, 3L}));
+        when(securityFindingRepository.countBySeveritySince(any())).thenReturn(List.of(
+                new Object[] {SecuritySeverity.CRITICAL, 1L},
+                new Object[] {SecuritySeverity.HIGH, 4L}));
+        when(securityFindingRepository.countByCategorySince(any())).thenReturn(List.of(
+                new Object[] {SecurityCategory.SECRETS_EXPOSURE, 1L},
+                new Object[] {SecurityCategory.INSECURE_CRYPTOGRAPHY, 4L}));
 
         DashboardOverviewResponse overview = service.getOverview(30);
 
@@ -44,6 +54,9 @@ class DashboardAggregationServiceTest {
         assertThat(overview.totalFindings()).isEqualTo(8L);
         assertThat(overview.findingsBySeverity()).containsEntry(PolicySeverity.HIGH, 3L);
         assertThat(overview.findingsByCategory()).containsEntry(PolicyCategory.CODE_QUALITY, 3L);
+        assertThat(overview.totalSecurityFindings()).isEqualTo(5L);
+        assertThat(overview.securityFindingsBySeverity()).containsEntry(SecuritySeverity.CRITICAL, 1L);
+        assertThat(overview.securityFindingsByCategory()).containsEntry(SecurityCategory.INSECURE_CRYPTOGRAPHY, 4L);
     }
 
     @Test
@@ -52,6 +65,8 @@ class DashboardAggregationServiceTest {
         when(analysisRunRepository.countByStatusSince(any())).thenReturn(List.of());
         when(policyFindingRepository.countBySeveritySince(any())).thenReturn(List.of());
         when(policyFindingRepository.countByCategorySince(any())).thenReturn(List.of());
+        when(securityFindingRepository.countBySeveritySince(any())).thenReturn(List.of());
+        when(securityFindingRepository.countByCategorySince(any())).thenReturn(List.of());
 
         DashboardOverviewResponse overview = service.getOverview(null);
 
@@ -64,11 +79,14 @@ class DashboardAggregationServiceTest {
         when(analysisRunRepository.countByStatusSince(any())).thenReturn(List.of());
         when(policyFindingRepository.countBySeveritySince(any())).thenReturn(List.of());
         when(policyFindingRepository.countByCategorySince(any())).thenReturn(List.of());
+        when(securityFindingRepository.countBySeveritySince(any())).thenReturn(List.of());
+        when(securityFindingRepository.countByCategorySince(any())).thenReturn(List.of());
 
         DashboardOverviewResponse overview = service.getOverview(7);
 
         assertThat(overview.totalAnalysisRuns()).isZero();
         assertThat(overview.totalFindings()).isZero();
         assertThat(overview.runsByStatus()).isEmpty();
+        assertThat(overview.totalSecurityFindings()).isZero();
     }
 }

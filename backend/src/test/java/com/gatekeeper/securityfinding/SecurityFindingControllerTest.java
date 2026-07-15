@@ -1,4 +1,4 @@
-package com.gatekeeper.analysisrun;
+package com.gatekeeper.securityfinding;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -8,9 +8,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gatekeeper.analysisrun.dto.AnalysisRunSummaryResponse;
 import com.gatekeeper.config.SecurityConfig;
 import com.gatekeeper.exception.ResourceNotFoundException;
+import com.gatekeeper.securityengine.SecurityCategory;
+import com.gatekeeper.securityengine.SecuritySeverity;
+import com.gatekeeper.securityfinding.dto.SecurityFindingResponse;
 import com.gatekeeper.security.CustomUserDetailsService;
 import com.gatekeeper.security.JwtAccessDeniedHandler;
 import com.gatekeeper.security.JwtAuthenticationEntryPoint;
@@ -30,20 +32,15 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.web.servlet.MockMvc;
 
-/**
- * Same @WebMvcTest + explicit SecurityConfig @Import pattern as
- * GitHubWebhookControllerTest, and the same "mock JwtService/CustomUserDetailsService
- * rather than @WithMockUser" convention this project already established.
- */
-@WebMvcTest(AnalysisRunController.class)
+@WebMvcTest(SecurityFindingController.class)
 @Import({SecurityConfig.class, JwtAuthenticationEntryPoint.class, JwtAccessDeniedHandler.class})
-class AnalysisRunControllerTest {
+class SecurityFindingControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockBean
-    private AnalysisRunService analysisRunService;
+    private SecurityFindingQueryService securityFindingQueryService;
 
     @MockBean
     private JwtService jwtService;
@@ -53,44 +50,41 @@ class AnalysisRunControllerTest {
 
     @Test
     void findAll_returns401WithoutAJwt() throws Exception {
-        mockMvc.perform(get("/api/v1/analysis-runs"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error.code").value("GK-401"));
+        mockMvc.perform(get("/api/v1/security-findings"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     void findAll_returnsThePagedResultWhenAuthenticated() throws Exception {
         authenticateAs("dev@example.com");
-        AnalysisRunSummaryResponse row = new AnalysisRunSummaryResponse(1L, 10L, "org/core", 21, "Add example",
-                "sha", AnalysisRunStatus.COMPLETED, AnalysisRunTriggerReason.OPENED, Instant.now(), Instant.now(), 2L, 1L);
-        Page<AnalysisRunSummaryResponse> page = new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1);
-        when(analysisRunService.findSummaryPage(any(), any())).thenReturn(page);
+        SecurityFindingResponse finding = new SecurityFindingResponse(1L, 9L, "org/core", 21, "sha", "HARDCODED_SECRET",
+                SecurityCategory.SECRETS_EXPOSURE, SecuritySeverity.CRITICAL, "src/Config.java", 1,
+                "Possible hardcoded secret found", "Remove the literal value.", Instant.now());
+        Page<SecurityFindingResponse> page = new PageImpl<>(List.of(finding), PageRequest.of(0, 20), 1);
+        when(securityFindingQueryService.findPage(any(), any())).thenReturn(page);
 
-        mockMvc.perform(get("/api/v1/analysis-runs").header("Authorization", "Bearer test-token"))
+        mockMvc.perform(get("/api/v1/security-findings?analysisRunId=9").header("Authorization", "Bearer test-token"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.content[0].repositoryFullName").value("org/core"))
-                .andExpect(jsonPath("$.data.content[0].findingsTotal").value(2))
-                .andExpect(jsonPath("$.data.content[0].securityFindingsTotal").value(1))
-                .andExpect(jsonPath("$.data.totalElements").value(1));
+                .andExpect(jsonPath("$.data.content[0].ruleId").value("HARDCODED_SECRET"))
+                .andExpect(jsonPath("$.data.content[0].repositoryFullName").value("org/core"));
     }
 
     @Test
     void findById_returns404WhenTheServiceThrowsResourceNotFound() throws Exception {
         authenticateAs("dev@example.com");
-        when(analysisRunService.findDetailByIdOrThrow(404L))
-                .thenThrow(new ResourceNotFoundException("AnalysisRun not found with id: 404"));
+        when(securityFindingQueryService.findByIdOrThrow(404L))
+                .thenThrow(new ResourceNotFoundException("SecurityFinding not found with id: 404"));
 
-        mockMvc.perform(get("/api/v1/analysis-runs/404").header("Authorization", "Bearer test-token"))
+        mockMvc.perform(get("/api/v1/security-findings/404").header("Authorization", "Bearer test-token"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("GK-404"));
     }
 
     @Test
-    void findAll_returns400WhenTheStatusFilterIsAnInvalidEnumValue() throws Exception {
+    void findAll_returns400WhenTheSeverityFilterIsAnInvalidEnumValue() throws Exception {
         authenticateAs("dev@example.com");
 
-        mockMvc.perform(get("/api/v1/analysis-runs?status=NOT_A_STATUS").header("Authorization", "Bearer test-token"))
+        mockMvc.perform(get("/api/v1/security-findings?severity=NOT_A_SEVERITY").header("Authorization", "Bearer test-token"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("GK-400"));
     }

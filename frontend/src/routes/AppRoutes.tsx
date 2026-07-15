@@ -3,6 +3,7 @@ import { LoginPage } from '../pages/LoginPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { AnalysisRunsPage } from '../pages/AnalysisRunsPage'
 import { AnalysisRunDetailPage } from '../pages/AnalysisRunDetailPage'
+import { SecurityFindingsPage } from '../pages/SecurityFindingsPage'
 import { ProtectedRoute } from './ProtectedRoute'
 
 export function AppRoutes() {
@@ -30,6 +31,14 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <AnalysisRunDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/security-findings"
+        element={
+          <ProtectedRoute>
+            <SecurityFindingsPage />
           </ProtectedRoute>
         }
       />

@@ -7,10 +7,17 @@ import java.time.Instant;
 
 /**
  * List-view row for GET /api/v1/analysis-runs (Milestone 5 Architecture, Section 2).
- * findingsTotal is populated by the service layer from a separate batched count
- * query over the page's ids, not by this factory method - see
- * AnalysisRunService.findSummaryPage and the architecture's Section 8 rationale
- * for why that count is deliberately not part of the same filtered/paginated query.
+ * findingsTotal and securityFindingsTotal are populated by the service layer
+ * from separate batched count queries over the page's ids, not by this factory
+ * method - see AnalysisRunService.findSummaryPage and the architecture's
+ * Section 8 rationale for why those counts are deliberately not part of the
+ * same filtered/paginated query.
+ * <p>
+ * securityFindingsTotal was added alongside the existing findingsTotal
+ * (Security Engine Architecture, Section 13) rather than renaming it to
+ * something like policyFindingsTotal - findingsTotal keeps its established,
+ * now implicitly Policy-only meaning so no existing consumer of this field
+ * breaks.
  */
 public record AnalysisRunSummaryResponse(
         Long id,
@@ -23,9 +30,10 @@ public record AnalysisRunSummaryResponse(
         AnalysisRunTriggerReason triggerReason,
         Instant createdAt,
         Instant updatedAt,
-        long findingsTotal) {
+        long findingsTotal,
+        long securityFindingsTotal) {
 
-    public static AnalysisRunSummaryResponse from(AnalysisRun run, long findingsTotal) {
+    public static AnalysisRunSummaryResponse from(AnalysisRun run, long findingsTotal, long securityFindingsTotal) {
         return new AnalysisRunSummaryResponse(
                 run.getId(),
                 run.getPullRequest().getRepository().getId(),
@@ -37,6 +45,7 @@ public record AnalysisRunSummaryResponse(
                 run.getTriggerReason(),
                 run.getCreatedAt(),
                 run.getUpdatedAt(),
-                findingsTotal);
+                findingsTotal,
+                securityFindingsTotal);
     }
 }

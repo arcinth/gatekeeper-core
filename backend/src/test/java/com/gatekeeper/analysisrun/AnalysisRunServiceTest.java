@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.policyfinding.PolicyFindingRepository;
 import com.gatekeeper.pullrequest.PullRequest;
+import com.gatekeeper.securityfinding.SecurityFindingRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -21,7 +22,9 @@ class AnalysisRunServiceTest {
 
     private final AnalysisRunRepository analysisRunRepository = mock(AnalysisRunRepository.class);
     private final PolicyFindingRepository policyFindingRepository = mock(PolicyFindingRepository.class);
-    private final AnalysisRunService service = new AnalysisRunService(analysisRunRepository, policyFindingRepository);
+    private final SecurityFindingRepository securityFindingRepository = mock(SecurityFindingRepository.class);
+    private final AnalysisRunService service =
+            new AnalysisRunService(analysisRunRepository, policyFindingRepository, securityFindingRepository);
     private final PullRequest pullRequest = pullRequestWithId(42L);
 
     @Test
@@ -184,7 +187,7 @@ class AnalysisRunServiceTest {
     }
 
     @Test
-    void findSummaryPage_enrichesEachRowWithItsFindingsTotalFromTheBatchedCountQuery() {
+    void findSummaryPage_enrichesEachRowWithItsFindingsTotalsFromBothEnginesBatchedCountQueries() {
         PullRequest pr = pullRequestWithRepository(42L, 100L, "org/core");
         AnalysisRun run = AnalysisRun.builder().pullRequest(pr).commitSha(COMMIT_SHA)
                 .status(AnalysisRunStatus.COMPLETED).triggerReason(AnalysisRunTriggerReason.OPENED).build();
@@ -197,6 +200,8 @@ class AnalysisRunServiceTest {
                 .thenReturn(page);
         when(policyFindingRepository.countByAnalysisRunIdIn(java.util.List.of(9L)))
                 .thenReturn(java.util.List.<Object[]>of(new Object[] {9L, 3L}));
+        when(securityFindingRepository.countByAnalysisRunIdIn(java.util.List.of(9L)))
+                .thenReturn(java.util.List.<Object[]>of(new Object[] {9L, 2L}));
 
         var result = service.findSummaryPage(
                 new com.gatekeeper.analysisrun.dto.AnalysisRunFilter(null, null, null, null, null),
@@ -204,11 +209,12 @@ class AnalysisRunServiceTest {
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).findingsTotal()).isEqualTo(3L);
+        assertThat(result.getContent().get(0).securityFindingsTotal()).isEqualTo(2L);
         assertThat(result.getContent().get(0).repositoryFullName()).isEqualTo("org/core");
     }
 
     @Test
-    void findSummaryPage_defaultsFindingsTotalToZeroWhenNoCountRowExists() {
+    void findSummaryPage_defaultsBothFindingsTotalsToZeroWhenNoCountRowExists() {
         PullRequest pr = pullRequestWithRepository(42L, 100L, "org/core");
         AnalysisRun run = AnalysisRun.builder().pullRequest(pr).commitSha(COMMIT_SHA)
                 .status(AnalysisRunStatus.COMPLETED).triggerReason(AnalysisRunTriggerReason.OPENED).build();
@@ -220,16 +226,18 @@ class AnalysisRunServiceTest {
                 org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(page);
         when(policyFindingRepository.countByAnalysisRunIdIn(java.util.List.of(9L))).thenReturn(java.util.List.of());
+        when(securityFindingRepository.countByAnalysisRunIdIn(java.util.List.of(9L))).thenReturn(java.util.List.of());
 
         var result = service.findSummaryPage(
                 new com.gatekeeper.analysisrun.dto.AnalysisRunFilter(null, null, null, null, null),
                 org.springframework.data.domain.PageRequest.of(0, 20));
 
         assertThat(result.getContent().get(0).findingsTotal()).isZero();
+        assertThat(result.getContent().get(0).securityFindingsTotal()).isZero();
     }
 
     @Test
-    void findSummaryPage_skipsTheBatchCountQueryEntirelyWhenThePageIsEmpty() {
+    void findSummaryPage_skipsBothBatchCountQueriesEntirelyWhenThePageIsEmpty() {
         org.springframework.data.domain.Page<AnalysisRun> emptyPage =
                 new org.springframework.data.domain.PageImpl<>(java.util.List.of());
         when(analysisRunRepository.findAll(
@@ -243,10 +251,11 @@ class AnalysisRunServiceTest {
 
         assertThat(result.getContent()).isEmpty();
         verify(policyFindingRepository, never()).countByAnalysisRunIdIn(any());
+        verify(securityFindingRepository, never()).countByAnalysisRunIdIn(any());
     }
 
     @Test
-    void findDetailByIdOrThrow_assemblesTheDetailResponseWithFindingsBySeverity() {
+    void findDetailByIdOrThrow_assemblesTheDetailResponseWithFindingsBySeverityFromBothEngines() {
         PullRequest pr = pullRequestWithRepository(42L, 100L, "org/core");
         AnalysisRun run = AnalysisRun.builder().pullRequest(pr).commitSha(COMMIT_SHA)
                 .status(AnalysisRunStatus.COMPLETED).triggerReason(AnalysisRunTriggerReason.OPENED).build();
@@ -254,12 +263,17 @@ class AnalysisRunServiceTest {
         when(analysisRunRepository.findWithPullRequestAndRepositoryById(9L)).thenReturn(Optional.of(run));
         when(policyFindingRepository.countBySeverityForAnalysisRun(9L))
                 .thenReturn(java.util.List.<Object[]>of(new Object[] {com.gatekeeper.policy.PolicySeverity.HIGH, 2L}));
+        when(securityFindingRepository.countBySeverityForAnalysisRun(9L))
+                .thenReturn(java.util.List.<Object[]>of(
+                        new Object[] {com.gatekeeper.securityengine.SecuritySeverity.CRITICAL, 1L}));
 
         var result = service.findDetailByIdOrThrow(9L);
 
         assertThat(result.id()).isEqualTo(9L);
         assertThat(result.repository().fullName()).isEqualTo("org/core");
         assertThat(result.findingsBySeverity()).containsEntry(com.gatekeeper.policy.PolicySeverity.HIGH, 2L);
+        assertThat(result.securityFindingsBySeverity())
+                .containsEntry(com.gatekeeper.securityengine.SecuritySeverity.CRITICAL, 1L);
     }
 
     @Test

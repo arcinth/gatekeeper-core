@@ -1,12 +1,14 @@
 package com.gatekeeper.analysisrun;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.pullrequest.PullRequest;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -96,6 +98,87 @@ class AnalysisRunServiceTest {
         AnalysisRun result = service.createIfAbsent(pullRequest, COMMIT_SHA, AnalysisRunTriggerReason.SYNCHRONIZE);
 
         assertThat(result).isSameAs(wonTheRace);
+    }
+
+    @Test
+    void findByIdOrThrow_returnsTheRunWhenItExists() {
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pullRequest).build();
+        when(analysisRunRepository.findById(9L)).thenReturn(Optional.of(run));
+
+        assertThat(service.findByIdOrThrow(9L)).isSameAs(run);
+    }
+
+    @Test
+    void findByIdOrThrow_throwsResourceNotFoundExceptionWhenMissing() {
+        when(analysisRunRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.findByIdOrThrow(404L))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void markQueued_transitionsAnAlreadyLoadedRunToQueuedAndSavesIt() {
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pullRequest).status(AnalysisRunStatus.RECEIVED).build();
+        when(analysisRunRepository.save(run)).thenReturn(run);
+
+        AnalysisRun result = service.markQueued(run);
+
+        assertThat(result.getStatus()).isEqualTo(AnalysisRunStatus.QUEUED);
+        verify(analysisRunRepository).save(run);
+    }
+
+    @Test
+    void markInProgress_loadsWithTheEagerAssociationGraphAndTransitionsToInProgress() {
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pullRequest).status(AnalysisRunStatus.QUEUED).build();
+        when(analysisRunRepository.findWithPullRequestAndRepositoryById(9L)).thenReturn(Optional.of(run));
+        when(analysisRunRepository.save(run)).thenReturn(run);
+
+        AnalysisRun result = service.markInProgress(9L);
+
+        assertThat(result.getStatus()).isEqualTo(AnalysisRunStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void markInProgress_throwsResourceNotFoundExceptionWhenMissing() {
+        when(analysisRunRepository.findWithPullRequestAndRepositoryById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.markInProgress(404L))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void markCompleted_transitionsAnAlreadyLoadedRunToCompleted() {
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pullRequest).status(AnalysisRunStatus.IN_PROGRESS).build();
+        when(analysisRunRepository.save(run)).thenReturn(run);
+
+        service.markCompleted(run);
+
+        assertThat(run.getStatus()).isEqualTo(AnalysisRunStatus.COMPLETED);
+        verify(analysisRunRepository).save(run);
+    }
+
+    @Test
+    void markFailed_loadsByIdAndRecordsTheFailureReason() {
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pullRequest).status(AnalysisRunStatus.IN_PROGRESS).build();
+        when(analysisRunRepository.findById(9L)).thenReturn(Optional.of(run));
+        when(analysisRunRepository.save(run)).thenReturn(run);
+
+        service.markFailed(9L, "GITHUB_API_ERROR: rate limited");
+
+        assertThat(run.getStatus()).isEqualTo(AnalysisRunStatus.FAILED);
+        assertThat(run.getFailureReason()).isEqualTo("GITHUB_API_ERROR: rate limited");
+    }
+
+    @Test
+    void markFailed_truncatesAnOverlyLongReasonToFitTheColumn() {
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pullRequest).status(AnalysisRunStatus.IN_PROGRESS).build();
+        when(analysisRunRepository.findById(9L)).thenReturn(Optional.of(run));
+        when(analysisRunRepository.save(run)).thenReturn(run);
+        String tooLong = "x".repeat(2500);
+
+        service.markFailed(9L, tooLong);
+
+        assertThat(run.getFailureReason()).hasSize(2000);
     }
 
     private PullRequest pullRequestWithId(Long id) {

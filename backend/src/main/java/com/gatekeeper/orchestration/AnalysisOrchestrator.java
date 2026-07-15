@@ -2,6 +2,7 @@ package com.gatekeeper.orchestration;
 
 import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.analysisrun.AnalysisRunService;
+import com.gatekeeper.analysisrun.AnalysisRunStatus;
 import com.gatekeeper.github.dto.PullRequestWebhookPayload;
 import com.gatekeeper.github.exception.MalformedWebhookPayloadException;
 import com.gatekeeper.pullrequest.PullRequest;
@@ -12,6 +13,7 @@ import com.gatekeeper.repository.RepositoryLookupService;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
  * Drives a verified "pull_request" webhook event through the ingestion
  * pipeline: resolve the Repository it belongs to, persist the PullRequest,
  * and create an AnalysisRun for the current commit (Sprint 2 Architecture,
- * Section 10). Nothing past AnalysisRun creation is this class's concern -
- * no AnalysisEngine exists yet for it to invoke (ADR-010).
+ * Section 10). Once queued, execution (Policy Engine and beyond) is
+ * AnalysisExecutionService's concern, triggered asynchronously via
+ * AnalysisRunReadyForExecutionEvent - this class's job ends at handing off
+ * a durably-queued run (Milestone 4 Architecture, Section 3 / ADR-013).
  */
 @Slf4j
 @Service
@@ -30,6 +34,7 @@ public class AnalysisOrchestrator {
     private final RepositoryLookupService repositoryLookupService;
     private final PullRequestService pullRequestService;
     private final AnalysisRunService analysisRunService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void handlePullRequestEvent(PullRequestWebhookPayload payload, String deliveryId) {
@@ -59,7 +64,30 @@ public class AnalysisOrchestrator {
                     pullRequest, payload.pullRequest().head().sha(), action.get().triggerReason());
             log.info("AnalysisRun {} ({}) recorded for PR #{} at commit {} (delivery {}).",
                     run.getId(), run.getStatus(), pullRequest.getNumber(), run.getCommitSha(), deliveryId);
+            queueForExecutionIfNewlyCreated(run, deliveryId);
         }
+    }
+
+    /**
+     * createIfAbsent is idempotent by design (Milestone 2): a webhook
+     * redelivery for a commit already recorded returns the existing run
+     * unchanged rather than creating a duplicate. RECEIVED is only ever the
+     * status of a run this call just created - anything else means this run
+     * already went through (or is still going through) the pipeline, so
+     * re-queuing it here would execute the Policy Engine a second time and
+     * insert duplicate findings. Checking status, rather than changing
+     * createIfAbsent's signature, keeps that already-approved method untouched.
+     */
+    private void queueForExecutionIfNewlyCreated(AnalysisRun run, String deliveryId) {
+        if (run.getStatus() != AnalysisRunStatus.RECEIVED) {
+            log.info("AnalysisRun {} is already {} - not re-queuing (delivery {}).",
+                    run.getId(), run.getStatus(), deliveryId);
+            return;
+        }
+
+        AnalysisRun queued = analysisRunService.markQueued(run);
+        eventPublisher.publishEvent(new AnalysisRunReadyForExecutionEvent(queued.getId()));
+        log.info("AnalysisRun {} queued for execution (delivery {}).", queued.getId(), deliveryId);
     }
 
     /**

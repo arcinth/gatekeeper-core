@@ -18,9 +18,12 @@ import lombok.Setter;
 
 /**
  * Represents one execution of the GateKeeper analysis pipeline for a single
- * Pull Request commit (docs/Database.md - Analysis Run entity). Analysis Runs
- * are immutable records once created - this class intentionally has no service
- * method that updates an existing row, only AnalysisRunService.createIfAbsent.
+ * Pull Request commit (docs/Database.md - Analysis Run entity). "Immutable"
+ * here means what's already been recorded never changes retroactively - a
+ * COMPLETED run's findings and verdict are final. It does not mean the status
+ * field is frozen at creation: status is this run's own lifecycle progression
+ * (RECEIVED -> QUEUED -> IN_PROGRESS -> COMPLETED/FAILED, Milestone 4
+ * Architecture, Section 5), tracked in real time by AnalysisRunService.
  */
 @Getter
 @Setter
@@ -46,4 +49,8 @@ public class AnalysisRun extends BaseEntity {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private AnalysisRunStatus status = AnalysisRunStatus.RECEIVED;
+
+    /** Populated only when status is FAILED; null otherwise. */
+    @Column(name = "failure_reason", length = 2000)
+    private String failureReason;
 }

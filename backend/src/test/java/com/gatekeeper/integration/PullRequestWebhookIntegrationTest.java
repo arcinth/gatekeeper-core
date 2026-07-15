@@ -26,9 +26,11 @@ import com.gatekeeper.repository.RepositoryRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -118,7 +120,7 @@ class PullRequestWebhookIntegrationTest {
     }
 
     @Test
-    void openedWebhook_persistsPullRequestAndCreatesAnalysisRunInReceivedStatus() throws Exception {
+    void openedWebhook_persistsPullRequestAndQueuesTheAnalysisRunForExecution() throws Exception {
         long githubPrId = 100_001L;
 
         performWebhook(payload("opened", githubPrId, 7, "sha-opened", "open", false), "delivery-1")
@@ -130,8 +132,39 @@ class PullRequestWebhookIntegrationTest {
         assertThat(pullRequest.getHeadSha()).isEqualTo("sha-opened");
 
         var run = analysisRunRepository.findByPullRequestIdAndCommitSha(pullRequest.getId(), "sha-opened").orElseThrow();
-        assertThat(run.getStatus()).isEqualTo(AnalysisRunStatus.RECEIVED);
         assertThat(run.getTriggerReason()).isEqualTo(AnalysisRunTriggerReason.OPENED);
+        // The webhook response returns as soon as the run is QUEUED, before
+        // AnalysisExecutionService's async listener has necessarily run -
+        // RECEIVED is no longer a valid assertion here (Milestone 4: the
+        // orchestrator transitions RECEIVED -> QUEUED synchronously, in the
+        // same transaction, before responding to GitHub).
+        assertThat(run.getStatus()).isIn(AnalysisRunStatus.QUEUED, AnalysisRunStatus.IN_PROGRESS, AnalysisRunStatus.FAILED);
+    }
+
+    /**
+     * No real GitHub App is configured for this test class (no WireMock stub,
+     * no valid private key), so AnalysisExecutionService's async execution is
+     * expected to fail once it tries to mint an installation token - this
+     * test exists to prove that failure path completes and is recorded
+     * correctly, not to prove the happy path (see
+     * PolicyEngineExecutionIntegrationTest for that, with GitHub stubbed via
+     * WireMock).
+     */
+    @Test
+    void openedWebhook_eventuallyMarksTheAnalysisRunFailedWhenGitHubCredentialsAreNotConfigured() throws Exception {
+        long githubPrId = 100_007L;
+
+        performWebhook(payload("opened", githubPrId, 13, "sha-no-creds", "open", false), "delivery-8")
+                .andExpect(status().isOk());
+
+        PullRequest pullRequest = pullRequestRepository.findByGithubPrId(githubPrId).orElseThrow();
+
+        Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            var run = analysisRunRepository.findByPullRequestIdAndCommitSha(pullRequest.getId(), "sha-no-creds")
+                    .orElseThrow();
+            assertThat(run.getStatus()).isEqualTo(AnalysisRunStatus.FAILED);
+            assertThat(run.getFailureReason()).contains("GitHub App private key");
+        });
     }
 
     @Test

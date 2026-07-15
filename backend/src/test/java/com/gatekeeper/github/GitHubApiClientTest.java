@@ -6,10 +6,14 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.gatekeeper.github.dto.GitHubFileChange;
 import com.gatekeeper.github.dto.InstallationAccessTokenResponse;
 import com.gatekeeper.github.exception.GitHubApiException;
+import com.gatekeeper.github.exception.GitHubTransientApiException;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +26,7 @@ import org.springframework.web.client.RestClient;
 class GitHubApiClientTest {
 
     private static final String BASE_URL = "https://api.github.com";
+    private static final int MAX_CHANGED_FILES = 300;
 
     private MockRestServiceServer mockServer;
     private GitHubApiClient client;
@@ -30,7 +35,7 @@ class GitHubApiClientTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        client = new GitHubApiClient(builder, BASE_URL);
+        client = new GitHubApiClient(builder, BASE_URL, MAX_CHANGED_FILES);
     }
 
     @Test
@@ -67,5 +72,109 @@ class GitHubApiClientTest {
         assertThatThrownBy(() -> client.mintInstallationAccessToken(42, "app-jwt"))
                 .isInstanceOf(GitHubApiException.class)
                 .hasMessageContaining("503");
+    }
+
+    @Test
+    void fetchPullRequestFiles_parsesFilesAndUsesSeparateOwnerAndRepoPathSegments() {
+        mockServer.expect(requestTo(BASE_URL + "/repos/gatekeeper/core/pulls/7/files?per_page=100&page=1"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer installation-token"))
+                .andRespond(withSuccess(
+                        "[{\"filename\":\"src/Foo.java\",\"status\":\"modified\",\"changes\":3,"
+                                + "\"patch\":\"@@ -1 +1 @@\\n+added\"}]",
+                        MediaType.APPLICATION_JSON));
+
+        List<GitHubFileChange> files = client.fetchPullRequestFiles("gatekeeper/core", 7, "installation-token");
+
+        assertThat(files).hasSize(1);
+        assertThat(files.get(0).filename()).isEqualTo("src/Foo.java");
+        assertThat(files.get(0).patch()).contains("+added");
+    }
+
+    @Test
+    void fetchPullRequestFiles_splitsRepositoryFullNameSoTheInternalSlashIsNotPercentEncoded() {
+        // A naive single "{repo}" path variable containing "gatekeeper/core" would have
+        // its internal slash percent-encoded by URI template expansion, producing a URL
+        // GitHub would 404 on. Asserting the exact expected URL (unencoded) catches that regression.
+        mockServer.expect(requestTo(BASE_URL + "/repos/gatekeeper/core/pulls/7/files?per_page=100&page=1"))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        assertThat(client.fetchPullRequestFiles("gatekeeper/core", 7, "token")).isEmpty();
+    }
+
+    @Test
+    void fetchPullRequestFiles_paginatesUntilAPageIsNotFull() {
+        String fullPage = fullPageOfFilesJson(100);
+        mockServer.expect(requestTo(BASE_URL + "/repos/org/repo/pulls/7/files?per_page=100&page=1"))
+                .andRespond(withSuccess(fullPage, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(BASE_URL + "/repos/org/repo/pulls/7/files?per_page=100&page=2"))
+                .andRespond(withSuccess(
+                        "[{\"filename\":\"last.txt\",\"status\":\"added\",\"changes\":1,\"patch\":\"+x\"}]",
+                        MediaType.APPLICATION_JSON));
+
+        List<GitHubFileChange> files = client.fetchPullRequestFiles("org/repo", 7, "token");
+
+        assertThat(files).hasSize(101);
+        assertThat(files.get(100).filename()).isEqualTo("last.txt");
+    }
+
+    @Test
+    void fetchPullRequestFiles_truncatesAtTheConfiguredMaximum() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        GitHubApiClient smallLimitClient = new GitHubApiClient(builder, BASE_URL, 50);
+
+        server.expect(requestTo(BASE_URL + "/repos/org/repo/pulls/7/files?per_page=100&page=1"))
+                .andRespond(withSuccess(fullPageOfFilesJson(100), MediaType.APPLICATION_JSON));
+
+        List<GitHubFileChange> files = smallLimitClient.fetchPullRequestFiles("org/repo", 7, "token");
+
+        assertThat(files).hasSize(50);
+    }
+
+    @Test
+    void fetchPullRequestFiles_wrapsA5xxResponseAsTransient() {
+        mockServer.expect(requestTo(BASE_URL + "/repos/org/repo/pulls/7/files?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThatThrownBy(() -> client.fetchPullRequestFiles("org/repo", 7, "token"))
+                .isInstanceOf(GitHubTransientApiException.class);
+    }
+
+    @Test
+    void fetchPullRequestFiles_wrapsA429ResponseAsTransient() {
+        mockServer.expect(requestTo(BASE_URL + "/repos/org/repo/pulls/7/files?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+
+        assertThatThrownBy(() -> client.fetchPullRequestFiles("org/repo", 7, "token"))
+                .isInstanceOf(GitHubTransientApiException.class);
+    }
+
+    @Test
+    void fetchPullRequestFiles_wrapsA404ResponseAsPermanentNotTransient() {
+        mockServer.expect(requestTo(BASE_URL + "/repos/org/repo/pulls/7/files?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThatThrownBy(() -> client.fetchPullRequestFiles("org/repo", 7, "token"))
+                .isInstanceOf(GitHubApiException.class)
+                .isNotInstanceOf(GitHubTransientApiException.class);
+    }
+
+    @Test
+    void fetchPullRequestFiles_rejectsARepositoryFullNameWithoutASlash() {
+        assertThatThrownBy(() -> client.fetchPullRequestFiles("no-slash", 7, "token"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private String fullPageOfFilesJson(int count) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < count; i++) {
+            if (i > 0) {
+                json.append(",");
+            }
+            json.append("{\"filename\":\"file").append(i).append(".txt\",\"status\":\"modified\",")
+                    .append("\"changes\":1,\"patch\":\"+line\"}");
+        }
+        return json.append("]").toString();
     }
 }

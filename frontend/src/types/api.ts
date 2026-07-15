@@ -4,6 +4,16 @@ export interface ApiResponse<T> {
   data: T
 }
 
+export interface PageResponse<T> {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  first: boolean
+  last: boolean
+}
+
 export interface ApiError {
   code: string
   message: string

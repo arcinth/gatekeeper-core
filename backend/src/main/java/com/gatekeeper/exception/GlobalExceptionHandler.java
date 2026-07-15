@@ -12,6 +12,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
 @RestControllerAdvice
@@ -37,6 +38,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
         return ResponseEntity.status(ErrorCode.GK_422.getHttpStatus())
                 .body(ApiErrorResponse.of(ErrorCode.GK_422.getCode(), ex.getMessage()));
+    }
+
+    /**
+     * Without this, an invalid enum query param (e.g. GET /analysis-runs?status=NOT_A_STATUS)
+     * fails during argument resolution - before any controller method body runs - and falls
+     * through to the generic 500 handler below, logging a full stack trace for what is
+     * actually a client input error (found while building Milestone 5's filterable list
+     * endpoints, which are the first place this project accepts enum query parameters).
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String message = "Invalid value '" + ex.getValue() + "' for parameter '" + ex.getName() + "'.";
+        return ResponseEntity.status(ErrorCode.GK_400.getHttpStatus())
+                .body(ApiErrorResponse.of(ErrorCode.GK_400.getCode(), message));
     }
 
     /**

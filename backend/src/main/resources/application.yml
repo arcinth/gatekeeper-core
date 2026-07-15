@@ -17,6 +17,11 @@ spring:
     properties:
       hibernate:
         format_sql: false
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+        one-indexed-parameters: false
   flyway:
     enabled: true
     baseline-on-migrate: true

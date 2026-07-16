@@ -230,7 +230,10 @@ class AnalysisRunAndPolicyFindingQueryIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.repository.fullName").value("query-it/core"))
                 .andExpect(jsonPath("$.data.pullRequest.number").value(31))
-                .andExpect(jsonPath("$.data.findingsBySeverity.LOW").value(2));
+                // TodoCommentRule is LOW severity, FixmeCommentRule is MEDIUM
+                // (see each rule's Javadoc) - this diff triggers one of each.
+                .andExpect(jsonPath("$.data.findingsBySeverity.LOW").value(1))
+                .andExpect(jsonPath("$.data.findingsBySeverity.MEDIUM").value(1));
 
         // Flat cross-run findings listing, filtered by this run's id.
         mockMvc.perform(get("/api/v1/policy-findings")

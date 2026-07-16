@@ -32,3 +32,10 @@ jobs:
       - name: Build and test
         working-directory: backend
         run: ./mvnw clean package
+
+      - name: Upload Surefire Reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/

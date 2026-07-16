@@ -32,6 +32,7 @@ import com.gatekeeper.repository.RepositoryRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -71,17 +72,24 @@ class PolicyEngineExecutionIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
-    private static WireMockServer wireMockServer;
-    private static String testAppPrivateKeyPem;
+    // @TestInstance(PER_CLASS) means @BeforeAll can no longer be trusted to
+    // run before @DynamicPropertySource (see the POSTGRES.start() comment
+    // below) - wireMockServer and testAppPrivateKeyPem are constructed here,
+    // at class-initialization time, instead of in a @BeforeAll method, so
+    // both are guaranteed to exist by the time @DynamicPropertySource reads
+    // them.
+    private static final WireMockServer wireMockServer =
+            new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
+    private static final String testAppPrivateKeyPem = generateTestAppPrivateKeyPem();
 
-    @BeforeAll
-    static void startWireMockAndGenerateTestKey() throws Exception {
-        wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
-        wireMockServer.start();
-
-        KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
-        String base64 = Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(keyPair.getPrivate().getEncoded());
-        testAppPrivateKeyPem = "-----BEGIN PRIVATE KEY-----\n" + base64 + "\n-----END PRIVATE KEY-----";
+    private static String generateTestAppPrivateKeyPem() {
+        try {
+            KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+            String base64 = Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(keyPair.getPrivate().getEncoded());
+            return "-----BEGIN PRIVATE KEY-----\n" + base64 + "\n-----END PRIVATE KEY-----";
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     @AfterAll
@@ -98,6 +106,9 @@ class PolicyEngineExecutionIntegrationTest {
         // is running before this property is ever resolved, regardless of
         // that ordering.
         POSTGRES.start();
+        if (!wireMockServer.isRunning()) {
+            wireMockServer.start();
+        }
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);

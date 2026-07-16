@@ -22,6 +22,10 @@ jobs:
           # Caches ~/.m2/repository, keyed on pom.xml.
           cache: maven
 
+      - name: Make Maven Wrapper executable
+        working-directory: backend
+        run: chmod +x mvnw
+
       # GitHub-hosted ubuntu-latest runners ship with a running Docker daemon,
       # so the Testcontainers-based integration tests run as part of this build
       # rather than being skipped.

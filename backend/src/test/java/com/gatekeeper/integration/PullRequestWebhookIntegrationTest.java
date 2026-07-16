@@ -31,8 +31,9 @@ import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.awaitility.Awaitility;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -58,6 +59,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @Testcontainers
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PullRequestWebhookIntegrationTest {
 
     @Container
@@ -99,7 +101,7 @@ class PullRequestWebhookIntegrationTest {
 
     private Repository linkedRepository;
 
-    @BeforeEach
+    @BeforeAll
     void seedLinkedRepository() {
         Organization organization = organizationService.getDefaultOrganization();
 

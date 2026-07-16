@@ -44,6 +44,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -67,6 +68,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @Testcontainers
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AnalysisRunAndPolicyFindingQueryIntegrationTest {
 
     @Container
@@ -139,10 +141,8 @@ class AnalysisRunAndPolicyFindingQueryIntegrationTest {
     private String bearerToken;
     private Long repositoryId;
 
-    @BeforeEach
-    void seedLinkedRepositoryAndAuthentication() {
-        wireMockServer.resetAll();
-
+    @BeforeAll
+    void seedLinkedRepository() {
         Organization organization = organizationService.getDefaultOrganization();
         GitHubInstallation installation = gitHubInstallationRepository.save(GitHubInstallation.builder()
                 .organization(organization)
@@ -158,6 +158,11 @@ class AnalysisRunAndPolicyFindingQueryIntegrationTest {
                 .githubInstallation(installation)
                 .build());
         repositoryId = repository.getId();
+    }
+
+    @BeforeEach
+    void resetStubsAndAuthenticate() {
+        wireMockServer.resetAll();
 
         stubFor(WireMock.post(urlPathEqualTo("/app/installations/" + LINKED_INSTALLATION_ID + "/access_tokens"))
                 .willReturn(aResponse().withStatus(201).withHeader("Content-Type", "application/json")

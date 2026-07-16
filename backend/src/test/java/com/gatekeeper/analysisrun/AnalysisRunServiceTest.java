@@ -12,6 +12,11 @@ import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.policyfinding.PolicyFindingRepository;
 import com.gatekeeper.pullrequest.PullRequest;
 import com.gatekeeper.securityfinding.SecurityFindingRepository;
+import com.gatekeeper.verdict.Verdict;
+import com.gatekeeper.verdict.VerdictReasonEntity;
+import com.gatekeeper.verdict.VerdictReasonRepository;
+import com.gatekeeper.verdict.VerdictRepository;
+import com.gatekeeper.verdictengine.VerdictOutcome;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -23,8 +28,10 @@ class AnalysisRunServiceTest {
     private final AnalysisRunRepository analysisRunRepository = mock(AnalysisRunRepository.class);
     private final PolicyFindingRepository policyFindingRepository = mock(PolicyFindingRepository.class);
     private final SecurityFindingRepository securityFindingRepository = mock(SecurityFindingRepository.class);
-    private final AnalysisRunService service =
-            new AnalysisRunService(analysisRunRepository, policyFindingRepository, securityFindingRepository);
+    private final VerdictRepository verdictRepository = mock(VerdictRepository.class);
+    private final VerdictReasonRepository verdictReasonRepository = mock(VerdictReasonRepository.class);
+    private final AnalysisRunService service = new AnalysisRunService(analysisRunRepository,
+            policyFindingRepository, securityFindingRepository, verdictRepository, verdictReasonRepository);
     private final PullRequest pullRequest = pullRequestWithId(42L);
 
     @Test
@@ -257,6 +264,48 @@ class AnalysisRunServiceTest {
     }
 
     @Test
+    void findSummaryPage_enrichesEachRowWithItsVerdictOutcomeFromABatchedLookup() {
+        PullRequest pr = pullRequestWithRepository(42L, 100L, "org/core");
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pr).commitSha(COMMIT_SHA)
+                .status(AnalysisRunStatus.COMPLETED).triggerReason(AnalysisRunTriggerReason.OPENED).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(run, "id", 9L);
+        org.springframework.data.domain.Page<AnalysisRun> page =
+                new org.springframework.data.domain.PageImpl<>(java.util.List.of(run));
+        when(analysisRunRepository.findAll(
+                org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<AnalysisRun>>any(),
+                org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+        Verdict verdict = Verdict.builder().analysisRun(run).outcome(VerdictOutcome.BLOCKED).build();
+        when(verdictRepository.findByAnalysisRunIdIn(java.util.List.of(9L))).thenReturn(java.util.List.of(verdict));
+
+        var result = service.findSummaryPage(
+                new com.gatekeeper.analysisrun.dto.AnalysisRunFilter(null, null, null, null, null),
+                org.springframework.data.domain.PageRequest.of(0, 20));
+
+        assertThat(result.getContent().get(0).verdictOutcome()).isEqualTo(VerdictOutcome.BLOCKED);
+    }
+
+    @Test
+    void findSummaryPage_leavesVerdictOutcomeNullWhenNoVerdictExistsYet() {
+        PullRequest pr = pullRequestWithRepository(42L, 100L, "org/core");
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pr).commitSha(COMMIT_SHA)
+                .status(AnalysisRunStatus.IN_PROGRESS).triggerReason(AnalysisRunTriggerReason.OPENED).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(run, "id", 9L);
+        org.springframework.data.domain.Page<AnalysisRun> page =
+                new org.springframework.data.domain.PageImpl<>(java.util.List.of(run));
+        when(analysisRunRepository.findAll(
+                org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<AnalysisRun>>any(),
+                org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(page);
+
+        var result = service.findSummaryPage(
+                new com.gatekeeper.analysisrun.dto.AnalysisRunFilter(null, null, null, null, null),
+                org.springframework.data.domain.PageRequest.of(0, 20));
+
+        assertThat(result.getContent().get(0).verdictOutcome()).isNull();
+    }
+
+    @Test
     void findSummaryPage_skipsBothBatchCountQueriesEntirelyWhenThePageIsEmpty() {
         org.springframework.data.domain.Page<AnalysisRun> emptyPage =
                 new org.springframework.data.domain.PageImpl<>(java.util.List.of());
@@ -294,6 +343,42 @@ class AnalysisRunServiceTest {
         assertThat(result.findingsBySeverity()).containsEntry(com.gatekeeper.policy.PolicySeverity.HIGH, 2L);
         assertThat(result.securityFindingsBySeverity())
                 .containsEntry(com.gatekeeper.securityengine.SecuritySeverity.CRITICAL, 1L);
+    }
+
+    @Test
+    void findDetailByIdOrThrow_embedsTheVerdictOutcomeAndReasonsWhenAVerdictExists() {
+        PullRequest pr = pullRequestWithRepository(42L, 100L, "org/core");
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pr).commitSha(COMMIT_SHA)
+                .status(AnalysisRunStatus.COMPLETED).triggerReason(AnalysisRunTriggerReason.OPENED).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(run, "id", 9L);
+        when(analysisRunRepository.findWithPullRequestAndRepositoryById(9L)).thenReturn(Optional.of(run));
+        Verdict verdict = Verdict.builder().analysisRun(run).outcome(VerdictOutcome.BLOCKED).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(verdict, "id", 5L);
+        when(verdictRepository.findByAnalysisRunId(9L)).thenReturn(Optional.of(verdict));
+        VerdictReasonEntity reason = VerdictReasonEntity.builder()
+                .verdict(verdict).ruleId("CRITICAL_SECURITY_FINDING").blocking(true).message("blocked!").build();
+        when(verdictReasonRepository.findByVerdictIdOrderById(5L)).thenReturn(java.util.List.of(reason));
+
+        var result = service.findDetailByIdOrThrow(9L);
+
+        assertThat(result.verdictOutcome()).isEqualTo(VerdictOutcome.BLOCKED);
+        assertThat(result.verdictReasons()).hasSize(1);
+        assertThat(result.verdictReasons().get(0).ruleId()).isEqualTo("CRITICAL_SECURITY_FINDING");
+        assertThat(result.verdictReasons().get(0).blocking()).isTrue();
+    }
+
+    @Test
+    void findDetailByIdOrThrow_leavesVerdictOutcomeNullAndReasonsEmptyWhenNoVerdictExistsYet() {
+        PullRequest pr = pullRequestWithRepository(42L, 100L, "org/core");
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pr).commitSha(COMMIT_SHA)
+                .status(AnalysisRunStatus.IN_PROGRESS).triggerReason(AnalysisRunTriggerReason.OPENED).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(run, "id", 9L);
+        when(analysisRunRepository.findWithPullRequestAndRepositoryById(9L)).thenReturn(Optional.of(run));
+
+        var result = service.findDetailByIdOrThrow(9L);
+
+        assertThat(result.verdictOutcome()).isNull();
+        assertThat(result.verdictReasons()).isEmpty();
     }
 
     @Test

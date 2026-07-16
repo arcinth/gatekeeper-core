@@ -15,6 +15,7 @@ import com.gatekeeper.security.CustomUserDetailsService;
 import com.gatekeeper.security.JwtAccessDeniedHandler;
 import com.gatekeeper.security.JwtAuthenticationEntryPoint;
 import com.gatekeeper.security.JwtService;
+import com.gatekeeper.verdictengine.VerdictOutcome;
 import io.jsonwebtoken.Claims;
 import java.time.Instant;
 import java.util.List;
@@ -62,7 +63,8 @@ class AnalysisRunControllerTest {
     void findAll_returnsThePagedResultWhenAuthenticated() throws Exception {
         authenticateAs("dev@example.com");
         AnalysisRunSummaryResponse row = new AnalysisRunSummaryResponse(1L, 10L, "org/core", 21, "Add example",
-                "sha", AnalysisRunStatus.COMPLETED, AnalysisRunTriggerReason.OPENED, Instant.now(), Instant.now(), 2L, 1L);
+                "sha", AnalysisRunStatus.COMPLETED, AnalysisRunTriggerReason.OPENED, Instant.now(), Instant.now(),
+                2L, 1L, VerdictOutcome.BLOCKED);
         Page<AnalysisRunSummaryResponse> page = new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1);
         when(analysisRunService.findSummaryPage(any(), any())).thenReturn(page);
 
@@ -72,6 +74,7 @@ class AnalysisRunControllerTest {
                 .andExpect(jsonPath("$.data.content[0].repositoryFullName").value("org/core"))
                 .andExpect(jsonPath("$.data.content[0].findingsTotal").value(2))
                 .andExpect(jsonPath("$.data.content[0].securityFindingsTotal").value(1))
+                .andExpect(jsonPath("$.data.content[0].verdictOutcome").value("BLOCKED"))
                 .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 

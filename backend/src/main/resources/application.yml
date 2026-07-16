@@ -98,6 +98,14 @@ gatekeeper:
       core-pool-size: ${AI_REVIEW_EXECUTION_CORE_POOL_SIZE:1}
       max-pool-size: ${AI_REVIEW_EXECUTION_MAX_POOL_SIZE:4}
       queue-capacity: ${AI_REVIEW_EXECUTION_QUEUE_CAPACITY:50}
+  report:
+    # Bounds how long the Report Engine waits for AI Review's independent
+    # async completion before publishing anyway with aiReviewStatus=UNAVAILABLE
+    # (Unified Engineering Report Architecture, Section 6 / ADR-046) - AI
+    # Review must never delay the report the same way it must never delay
+    # the governance decision itself.
+    ai-wait-timeout-seconds: ${REPORT_AI_WAIT_TIMEOUT_SECONDS:120}
+    sweep-interval-ms: ${REPORT_SWEEP_INTERVAL_MS:60000}
 
 springdoc:
   api-docs:

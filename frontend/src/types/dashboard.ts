@@ -2,7 +2,9 @@ import type { AIReviewConfidence, AIReviewFindingType } from './aiReviewFinding'
 import type { AIReviewRunStatus } from './aiReviewRun'
 import type { AnalysisRunStatus } from './analysisRun'
 import type { PolicyCategory, PolicySeverity } from './policyFinding'
+import type { AiReviewStatus } from './report'
 import type { SecurityCategory, SecuritySeverity } from './securityFinding'
+import type { VerdictOutcome } from './verdict'
 
 export interface DashboardStatus {
   status: string
@@ -25,4 +27,8 @@ export interface DashboardOverview {
   totalAiReviewFindings: number
   aiReviewFindingsByConfidence: Partial<Record<AIReviewConfidence, number>>
   aiReviewFindingsByType: Partial<Record<AIReviewFindingType, number>>
+  totalVerdicts: number
+  verdictsByOutcome: Partial<Record<VerdictOutcome, number>>
+  totalReportsPublished: number
+  reportsByAiStatus: Partial<Record<AiReviewStatus, number>>
 }

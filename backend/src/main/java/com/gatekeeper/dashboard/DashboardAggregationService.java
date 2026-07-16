@@ -10,10 +10,14 @@ import com.gatekeeper.analysisrun.AnalysisRunStatus;
 import com.gatekeeper.policy.PolicyCategory;
 import com.gatekeeper.policy.PolicySeverity;
 import com.gatekeeper.policyfinding.PolicyFindingRepository;
+import com.gatekeeper.report.AiReviewStatus;
+import com.gatekeeper.report.EngineeringReportRepository;
 import com.gatekeeper.repository.RepositoryRepository;
 import com.gatekeeper.securityengine.SecurityCategory;
 import com.gatekeeper.securityengine.SecuritySeverity;
 import com.gatekeeper.securityfinding.SecurityFindingRepository;
+import com.gatekeeper.verdict.VerdictRepository;
+import com.gatekeeper.verdictengine.VerdictOutcome;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumMap;
@@ -42,6 +46,8 @@ public class DashboardAggregationService {
     private final SecurityFindingRepository securityFindingRepository;
     private final AIReviewRunRepository aiReviewRunRepository;
     private final AIReviewFindingRepository aiReviewFindingRepository;
+    private final VerdictRepository verdictRepository;
+    private final EngineeringReportRepository engineeringReportRepository;
     private final RepositoryRepository repositoryRepository;
 
     public DashboardOverviewResponse getOverview(Integer windowDays) {
@@ -66,6 +72,10 @@ public class DashboardAggregationService {
                 toEnumCountMap(aiReviewFindingRepository.countByConfidenceSince(since), AIReviewConfidence.class);
         Map<AIReviewFindingType, Long> aiReviewFindingsByType =
                 toEnumCountMap(aiReviewFindingRepository.countByTypeSince(since), AIReviewFindingType.class);
+        Map<VerdictOutcome, Long> verdictsByOutcome =
+                toEnumCountMap(verdictRepository.countByOutcomeSince(since), VerdictOutcome.class);
+        Map<AiReviewStatus, Long> reportsByAiStatus =
+                toEnumCountMap(engineeringReportRepository.countByAiReviewStatusSince(since), AiReviewStatus.class);
 
         return new DashboardOverviewResponse(
                 effectiveWindowDays,
@@ -82,7 +92,11 @@ public class DashboardAggregationService {
                 aiReviewRunsByStatus,
                 sum(aiReviewFindingsByConfidence),
                 aiReviewFindingsByConfidence,
-                aiReviewFindingsByType);
+                aiReviewFindingsByType,
+                sum(verdictsByOutcome),
+                verdictsByOutcome,
+                sum(reportsByAiStatus),
+                reportsByAiStatus);
     }
 
     @SuppressWarnings("unchecked")

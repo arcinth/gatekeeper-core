@@ -3,9 +3,15 @@ import { LoginPage } from '../pages/LoginPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { AnalysisRunsPage } from '../pages/AnalysisRunsPage'
 import { AnalysisRunDetailPage } from '../pages/AnalysisRunDetailPage'
+import { PolicyFindingsPage } from '../pages/PolicyFindingsPage'
 import { SecurityFindingsPage } from '../pages/SecurityFindingsPage'
 import { AIReviewRunsPage } from '../pages/AIReviewRunsPage'
 import { AIReviewRunDetailPage } from '../pages/AIReviewRunDetailPage'
+import { VerdictsPage } from '../pages/VerdictsPage'
+import { VerdictDetailPage } from '../pages/VerdictDetailPage'
+import { RepositoryGovernancePage } from '../pages/RepositoryGovernancePage'
+import { RepositoriesPage } from '../pages/RepositoriesPage'
+import { UsersPage } from '../pages/UsersPage'
 import { ProtectedRoute } from './ProtectedRoute'
 
 export function AppRoutes() {
@@ -37,6 +43,14 @@ export function AppRoutes() {
         }
       />
       <Route
+        path="/policy-findings"
+        element={
+          <ProtectedRoute>
+            <PolicyFindingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/security-findings"
         element={
           <ProtectedRoute>
@@ -57,6 +71,54 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <AIReviewRunDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/verdicts"
+        element={
+          <ProtectedRoute>
+            <VerdictsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/verdicts/:id"
+        element={
+          <ProtectedRoute>
+            <VerdictDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/repositories"
+        element={
+          <ProtectedRoute>
+            <RepositoriesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/repositories/governance"
+        element={
+          <ProtectedRoute>
+            <RepositoryGovernancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/repositories/:id/governance"
+        element={
+          <ProtectedRoute>
+            <RepositoryGovernancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/users"
+        element={
+          <ProtectedRoute>
+            <UsersPage />
           </ProtectedRoute>
         }
       />

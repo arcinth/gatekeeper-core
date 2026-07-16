@@ -15,8 +15,10 @@ import com.gatekeeper.analysisrun.AnalysisRunStatus;
 import com.gatekeeper.config.SecurityConfig;
 import com.gatekeeper.policy.PolicyCategory;
 import com.gatekeeper.policy.PolicySeverity;
+import com.gatekeeper.report.AiReviewStatus;
 import com.gatekeeper.securityengine.SecurityCategory;
 import com.gatekeeper.securityengine.SecuritySeverity;
+import com.gatekeeper.verdictengine.VerdictOutcome;
 import com.gatekeeper.security.CustomUserDetailsService;
 import com.gatekeeper.security.JwtAccessDeniedHandler;
 import com.gatekeeper.security.JwtAuthenticationEntryPoint;
@@ -78,7 +80,11 @@ class DashboardControllerTest {
                 Map.of(AIReviewRunStatus.COMPLETED, 3L, AIReviewRunStatus.FAILED, 1L),
                 2L,
                 Map.of(AIReviewConfidence.HIGH, 1L, AIReviewConfidence.LOW, 1L),
-                Map.of(AIReviewFindingType.SUGGESTION, 1L, AIReviewFindingType.POTENTIAL_BUG, 1L));
+                Map.of(AIReviewFindingType.SUGGESTION, 1L, AIReviewFindingType.POTENTIAL_BUG, 1L),
+                8L,
+                Map.of(VerdictOutcome.APPROVED, 6L, VerdictOutcome.BLOCKED, 2L),
+                6L,
+                Map.of(AiReviewStatus.INCLUDED, 4L, AiReviewStatus.UNAVAILABLE, 2L));
         when(dashboardAggregationService.getOverview(any())).thenReturn(overview);
 
         mockMvc.perform(get("/api/v1/dashboard/overview").header("Authorization", "Bearer test-token"))
@@ -88,7 +94,11 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.data.windowDays").value(30))
                 .andExpect(jsonPath("$.data.totalSecurityFindings").value(3))
                 .andExpect(jsonPath("$.data.totalAiReviewRuns").value(4))
-                .andExpect(jsonPath("$.data.totalAiReviewFindings").value(2));
+                .andExpect(jsonPath("$.data.totalAiReviewFindings").value(2))
+                .andExpect(jsonPath("$.data.totalVerdicts").value(8))
+                .andExpect(jsonPath("$.data.verdictsByOutcome.BLOCKED").value(2))
+                .andExpect(jsonPath("$.data.totalReportsPublished").value(6))
+                .andExpect(jsonPath("$.data.reportsByAiStatus.INCLUDED").value(4));
     }
 
     @Test

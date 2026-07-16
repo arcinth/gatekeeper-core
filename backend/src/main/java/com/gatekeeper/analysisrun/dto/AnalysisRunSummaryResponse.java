@@ -3,6 +3,7 @@ package com.gatekeeper.analysisrun.dto;
 import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.analysisrun.AnalysisRunStatus;
 import com.gatekeeper.analysisrun.AnalysisRunTriggerReason;
+import com.gatekeeper.verdictengine.VerdictOutcome;
 import java.time.Instant;
 
 /**
@@ -18,6 +19,11 @@ import java.time.Instant;
  * something like policyFindingsTotal - findingsTotal keeps its established,
  * now implicitly Policy-only meaning so no existing consumer of this field
  * breaks.
+ * <p>
+ * verdictOutcome was added the same additive way (Sprint 5 Architecture,
+ * Section 14 / ADR-043) - nullable, since it is null for any run that has
+ * not yet reached COMPLETED (a Verdict only ever exists alongside a
+ * COMPLETED AnalysisRun, ADR-039).
  */
 public record AnalysisRunSummaryResponse(
         Long id,
@@ -31,9 +37,11 @@ public record AnalysisRunSummaryResponse(
         Instant createdAt,
         Instant updatedAt,
         long findingsTotal,
-        long securityFindingsTotal) {
+        long securityFindingsTotal,
+        VerdictOutcome verdictOutcome) {
 
-    public static AnalysisRunSummaryResponse from(AnalysisRun run, long findingsTotal, long securityFindingsTotal) {
+    public static AnalysisRunSummaryResponse from(
+            AnalysisRun run, long findingsTotal, long securityFindingsTotal, VerdictOutcome verdictOutcome) {
         return new AnalysisRunSummaryResponse(
                 run.getId(),
                 run.getPullRequest().getRepository().getId(),
@@ -46,6 +54,7 @@ public record AnalysisRunSummaryResponse(
                 run.getCreatedAt(),
                 run.getUpdatedAt(),
                 findingsTotal,
-                securityFindingsTotal);
+                securityFindingsTotal,
+                verdictOutcome);
     }
 }

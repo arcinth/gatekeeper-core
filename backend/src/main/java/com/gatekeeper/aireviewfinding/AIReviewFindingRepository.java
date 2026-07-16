@@ -26,6 +26,16 @@ public interface AIReviewFindingRepository extends JpaRepository<AIReviewFinding
             "aiReviewRun.analysisRun.pullRequest", "aiReviewRun.analysisRun.pullRequest.repository"})
     Optional<AIReviewFindingEntity> findWithContextById(Long id);
 
+    /**
+     * Every finding for one AIReviewRun, in a stable order - backs
+     * ReportQueryService's Unified Engineering Report composition (Unified
+     * Engineering Report Architecture, Milestone 2), called only when
+     * aiReviewStatus is INCLUDED. Mirrors PolicyFindingRepository's own
+     * addition, keyed by aiReviewRunId rather than analysisRunId (see this
+     * interface's own Javadoc for why).
+     */
+    List<AIReviewFindingEntity> findByAiReviewRunIdOrderById(Long aiReviewRunId);
+
     /** Batched per-run findings count for the AI review runs list view. */
     @Query("SELECT f.aiReviewRun.id, COUNT(f) FROM AIReviewFindingEntity f "
             + "WHERE f.aiReviewRun.id IN :aiReviewRunIds GROUP BY f.aiReviewRun.id")
@@ -42,4 +52,21 @@ public interface AIReviewFindingRepository extends JpaRepository<AIReviewFinding
 
     @Query("SELECT f.type, COUNT(f) FROM AIReviewFindingEntity f WHERE f.createdAt >= :since GROUP BY f.type")
     List<Object[]> countByTypeSince(@Param("since") Instant since);
+
+    /**
+     * Repository Governance View aggregates (Repository Governance View
+     * Architecture, Section 6) - mirror countByConfidenceSince/countByTypeSince
+     * with an added repository filter, one indirection level deeper than the
+     * other findings' equivalents (see this interface's own Javadoc for why).
+     * Computed in SQL, never in-memory.
+     */
+    @Query("SELECT f.confidence, COUNT(f) FROM AIReviewFindingEntity f "
+            + "WHERE f.createdAt >= :since AND f.aiReviewRun.analysisRun.pullRequest.repository.id = :repositoryId "
+            + "GROUP BY f.confidence")
+    List<Object[]> countByConfidenceSinceForRepository(@Param("since") Instant since, @Param("repositoryId") Long repositoryId);
+
+    @Query("SELECT f.type, COUNT(f) FROM AIReviewFindingEntity f "
+            + "WHERE f.createdAt >= :since AND f.aiReviewRun.analysisRun.pullRequest.repository.id = :repositoryId "
+            + "GROUP BY f.type")
+    List<Object[]> countByTypeSinceForRepository(@Param("since") Instant since, @Param("repositoryId") Long repositoryId);
 }

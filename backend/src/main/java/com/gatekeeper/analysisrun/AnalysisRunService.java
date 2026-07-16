@@ -9,12 +9,19 @@ import com.gatekeeper.policyfinding.PolicyFindingRepository;
 import com.gatekeeper.pullrequest.PullRequest;
 import com.gatekeeper.securityengine.SecuritySeverity;
 import com.gatekeeper.securityfinding.SecurityFindingRepository;
+import com.gatekeeper.verdict.Verdict;
+import com.gatekeeper.verdict.VerdictReasonRepository;
+import com.gatekeeper.verdict.VerdictRepository;
+import com.gatekeeper.verdict.dto.VerdictReasonSummary;
+import com.gatekeeper.verdictengine.VerdictOutcome;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -49,6 +56,8 @@ public class AnalysisRunService {
     private final AnalysisRunRepository analysisRunRepository;
     private final PolicyFindingRepository policyFindingRepository;
     private final SecurityFindingRepository securityFindingRepository;
+    private final VerdictRepository verdictRepository;
+    private final VerdictReasonRepository verdictReasonRepository;
 
     @Transactional
     public AnalysisRun createIfAbsent(PullRequest pullRequest, String commitSha, AnalysisRunTriggerReason triggerReason) {
@@ -89,9 +98,11 @@ public class AnalysisRunService {
         Map<Long, Long> findingsTotals = countsByAnalysisRunId(ids, policyFindingRepository::countByAnalysisRunIdIn);
         Map<Long, Long> securityFindingsTotals =
                 countsByAnalysisRunId(ids, securityFindingRepository::countByAnalysisRunIdIn);
+        Map<Long, VerdictOutcome> verdictOutcomes = verdictOutcomesByAnalysisRunId(ids);
         return page.map(run -> AnalysisRunSummaryResponse.from(run,
                 findingsTotals.getOrDefault(run.getId(), 0L),
-                securityFindingsTotals.getOrDefault(run.getId(), 0L)));
+                securityFindingsTotals.getOrDefault(run.getId(), 0L),
+                verdictOutcomes.get(run.getId())));
     }
 
     public AnalysisRunDetailResponse findDetailByIdOrThrow(Long analysisRunId) {
@@ -105,7 +116,34 @@ public class AnalysisRunService {
         for (Object[] row : securityFindingRepository.countBySeverityForAnalysisRun(analysisRunId)) {
             securityFindingsBySeverity.put((SecuritySeverity) row[0], (Long) row[1]);
         }
-        return AnalysisRunDetailResponse.from(run, findingsBySeverity, securityFindingsBySeverity);
+
+        VerdictOutcome verdictOutcome = null;
+        List<VerdictReasonSummary> verdictReasons = List.of();
+        Optional<Verdict> verdict = verdictRepository.findByAnalysisRunId(analysisRunId);
+        if (verdict.isPresent()) {
+            verdictOutcome = verdict.get().getOutcome();
+            verdictReasons = verdictReasonRepository.findByVerdictIdOrderById(verdict.get().getId()).stream()
+                    .map(VerdictReasonSummary::from)
+                    .toList();
+        }
+
+        return AnalysisRunDetailResponse.from(
+                run, findingsBySeverity, securityFindingsBySeverity, verdictOutcome, verdictReasons);
+    }
+
+    /**
+     * Batched per-run verdict outcome lookup for findSummaryPage's
+     * enrichment - mirrors countsByAnalysisRunId's empty-page guard, but
+     * returns full Verdict entities (mapped down to just their outcome)
+     * rather than counts, since a list row needs the actual outcome value,
+     * not how many verdicts exist (always zero or one, per ADR-039).
+     */
+    private Map<Long, VerdictOutcome> verdictOutcomesByAnalysisRunId(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return verdictRepository.findByAnalysisRunIdIn(ids).stream()
+                .collect(Collectors.toMap(v -> v.getAnalysisRun().getId(), Verdict::getOutcome));
     }
 
     /**

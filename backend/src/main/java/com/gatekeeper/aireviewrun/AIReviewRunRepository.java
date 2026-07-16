@@ -21,6 +21,14 @@ public interface AIReviewRunRepository extends JpaRepository<AIReviewRun, Long>,
     @EntityGraph(attributePaths = {"analysisRun", "analysisRun.pullRequest", "analysisRun.pullRequest.repository"})
     Optional<AIReviewRun> findWithContextById(Long id);
 
+    /**
+     * Single-run lookup for ReportPublicationService.onVerdictProduced
+     * (Unified Engineering Report Architecture, Milestone 1) - checks
+     * whether AI review already reached a terminal state for this run.
+     * Purely additive: AI Review Engine's own decision logic is untouched.
+     */
+    Optional<AIReviewRun> findByAnalysisRunId(Long analysisRunId);
+
     /** Dashboard overview aggregate - computed in SQL, never in-memory (mirrors AnalysisRunRepository.countByStatusSince). */
     @Query("SELECT r.status, COUNT(r) FROM AIReviewRun r WHERE r.createdAt >= :since GROUP BY r.status")
     List<Object[]> countByStatusSince(@Param("since") Instant since);

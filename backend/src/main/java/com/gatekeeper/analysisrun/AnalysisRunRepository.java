@@ -31,4 +31,15 @@ public interface AnalysisRunRepository extends JpaRepository<AnalysisRun, Long>,
     /** Dashboard overview aggregate (Milestone 5 Architecture, Section 8) - computed in SQL, never in-memory. */
     @Query("SELECT ar.status, COUNT(ar) FROM AnalysisRun ar WHERE ar.createdAt >= :since GROUP BY ar.status")
     List<Object[]> countByStatusSince(@Param("since") Instant since);
+
+    /**
+     * Repository Governance View aggregate (Repository Governance View
+     * Architecture, Section 6) - the same shape as countByStatusSince, with
+     * an added repository filter along the same pullRequest.repository.id
+     * path AnalysisRunSpecifications.hasRepositoryId already traverses for
+     * the paginated list endpoint. Computed in SQL, never in-memory.
+     */
+    @Query("SELECT ar.status, COUNT(ar) FROM AnalysisRun ar "
+            + "WHERE ar.createdAt >= :since AND ar.pullRequest.repository.id = :repositoryId GROUP BY ar.status")
+    List<Object[]> countByStatusSinceForRepository(@Param("since") Instant since, @Param("repositoryId") Long repositoryId);
 }

@@ -1,5 +1,6 @@
 import type { PolicySeverity } from './policyFinding'
 import type { SecuritySeverity } from './securityFinding'
+import type { VerdictOutcome, VerdictReason } from './verdict'
 
 export type AnalysisRunStatus = 'RECEIVED' | 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
 export type AnalysisRunTriggerReason = 'OPENED' | 'REOPENED' | 'SYNCHRONIZE'
@@ -18,6 +19,7 @@ export interface AnalysisRunSummary {
   updatedAt: string
   findingsTotal: number
   securityFindingsTotal: number
+  verdictOutcome: VerdictOutcome | null
 }
 
 export interface RepositoryReference {
@@ -47,6 +49,8 @@ export interface AnalysisRunDetail {
   updatedAt: string
   findingsBySeverity: Partial<Record<PolicySeverity, number>>
   securityFindingsBySeverity: Partial<Record<SecuritySeverity, number>>
+  verdictOutcome: VerdictOutcome | null
+  verdictReasons: VerdictReason[]
 }
 
 export interface AnalysisRunFilters {

@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 
 class AIReviewResultPersistenceServiceTest {
 
@@ -31,8 +32,9 @@ class AIReviewResultPersistenceServiceTest {
     private final AIReviewProvider aiReviewProvider = mock(AIReviewProvider.class);
     private final AIReviewRunRepository aiReviewRunRepository = mock(AIReviewRunRepository.class);
     private final AIReviewFindingRepository aiReviewFindingRepository = mock(AIReviewFindingRepository.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final AIReviewResultPersistenceService service = new AIReviewResultPersistenceService(
-            analysisRunService, aiReviewProvider, aiReviewRunRepository, aiReviewFindingRepository);
+            analysisRunService, aiReviewProvider, aiReviewRunRepository, aiReviewFindingRepository, eventPublisher);
 
     @Test
     void persistCompletedResult_savesAnAiReviewRunStampedWithProviderModelAndPromptVersion() {
@@ -67,6 +69,11 @@ class AIReviewResultPersistenceServiceTest {
         verify(aiReviewFindingRepository).saveAll(findingsCaptor.capture());
         assertThat(findingsCaptor.getValue()).hasSize(1);
         assertThat(findingsCaptor.getValue().get(0).getAiReviewRun()).isSameAs(savedRun);
+
+        ArgumentCaptor<AIReviewFinishedEvent> eventCaptor = ArgumentCaptor.forClass(AIReviewFinishedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().analysisRunId()).isEqualTo(ANALYSIS_RUN_ID);
+        assertThat(eventCaptor.getValue().status()).isEqualTo(AIReviewRunStatus.COMPLETED);
     }
 
     @Test
@@ -110,6 +117,11 @@ class AIReviewResultPersistenceServiceTest {
         assertThat(savedRun.getPromptVersion()).isEqualTo("v1");
 
         verify(aiReviewFindingRepository, org.mockito.Mockito.never()).saveAll(anyList());
+
+        ArgumentCaptor<AIReviewFinishedEvent> eventCaptor = ArgumentCaptor.forClass(AIReviewFinishedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().analysisRunId()).isEqualTo(ANALYSIS_RUN_ID);
+        assertThat(eventCaptor.getValue().status()).isEqualTo(AIReviewRunStatus.FAILED);
     }
 
     @Test

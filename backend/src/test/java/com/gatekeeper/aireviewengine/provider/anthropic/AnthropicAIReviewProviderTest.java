@@ -13,6 +13,8 @@ import com.gatekeeper.aireviewengine.AIReviewContext;
 import com.gatekeeper.aireviewengine.AIReviewResult;
 import com.gatekeeper.aireviewengine.exception.AIProviderException;
 import com.gatekeeper.aireviewengine.exception.AIProviderTransientException;
+import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -145,6 +147,36 @@ class AnthropicAIReviewProviderTest {
         assertThatThrownBy(() -> fixture.provider.review(context()))
                 .isInstanceOf(AIProviderException.class)
                 .isNotInstanceOf(AIProviderTransientException.class);
+    }
+
+    // --- Sprint 8 Milestone 3: AI Engine Resiliency Validation - scenarios 6 (timeout) and
+    // 7 (network failure). Both surface identically at the transport layer: Spring's RestClient
+    // wraps any IOException raised while executing the request as a ResourceAccessException
+    // (a RestClientException, not a RestClientResponseException, since no HTTP response was ever
+    // received) - exactly the second catch block in AnthropicAIReviewProvider#callAnthropic.
+
+    @Test
+    void review_wrapsANetworkFailureAsTransient() {
+        Fixture fixture = fixture(true, "test-api-key");
+        fixture.mockServer.expect(requestTo(BASE_URL + "/v1/messages"))
+                .andRespond(request -> {
+                    throw new IOException("Connection refused");
+                });
+
+        assertThatThrownBy(() -> fixture.provider.review(context()))
+                .isInstanceOf(AIProviderTransientException.class);
+    }
+
+    @Test
+    void review_wrapsAConnectTimeoutAsTransient() {
+        Fixture fixture = fixture(true, "test-api-key");
+        fixture.mockServer.expect(requestTo(BASE_URL + "/v1/messages"))
+                .andRespond(request -> {
+                    throw new SocketTimeoutException("Connect timed out");
+                });
+
+        assertThatThrownBy(() -> fixture.provider.review(context()))
+                .isInstanceOf(AIProviderTransientException.class);
     }
 
     private AIReviewContext context() {

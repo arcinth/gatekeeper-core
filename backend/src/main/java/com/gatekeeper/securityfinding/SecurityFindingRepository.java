@@ -23,6 +23,14 @@ public interface SecurityFindingRepository extends JpaRepository<SecurityFinding
     @EntityGraph(attributePaths = {"analysisRun", "analysisRun.pullRequest", "analysisRun.pullRequest.repository"})
     Optional<SecurityFindingEntity> findWithContextById(Long id);
 
+    /**
+     * Every finding for one run, in a stable order - backs ReportQueryService's
+     * Unified Engineering Report composition (Unified Engineering Report
+     * Architecture, Milestone 2). Mirrors PolicyFindingRepository's own
+     * addition - see its Javadoc for why no separate EntityGraph is needed.
+     */
+    List<SecurityFindingEntity> findByAnalysisRunIdOrderById(Long analysisRunId);
+
     /** Batched per-run findings count for the analysis-run list view. */
     @Query("SELECT sf.analysisRun.id, COUNT(sf) FROM SecurityFindingEntity sf "
             + "WHERE sf.analysisRun.id IN :analysisRunIds GROUP BY sf.analysisRun.id")
@@ -39,4 +47,17 @@ public interface SecurityFindingRepository extends JpaRepository<SecurityFinding
 
     @Query("SELECT sf.category, COUNT(sf) FROM SecurityFindingEntity sf WHERE sf.createdAt >= :since GROUP BY sf.category")
     List<Object[]> countByCategorySince(@Param("since") Instant since);
+
+    /**
+     * Repository Governance View aggregates (Repository Governance View
+     * Architecture, Section 6) - mirror countBySeveritySince/countByCategorySince
+     * with an added repository filter, computed in SQL, never in-memory.
+     */
+    @Query("SELECT sf.severity, COUNT(sf) FROM SecurityFindingEntity sf "
+            + "WHERE sf.createdAt >= :since AND sf.analysisRun.pullRequest.repository.id = :repositoryId GROUP BY sf.severity")
+    List<Object[]> countBySeveritySinceForRepository(@Param("since") Instant since, @Param("repositoryId") Long repositoryId);
+
+    @Query("SELECT sf.category, COUNT(sf) FROM SecurityFindingEntity sf "
+            + "WHERE sf.createdAt >= :since AND sf.analysisRun.pullRequest.repository.id = :repositoryId GROUP BY sf.category")
+    List<Object[]> countByCategorySinceForRepository(@Param("since") Instant since, @Param("repositoryId") Long repositoryId);
 }

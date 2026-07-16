@@ -13,6 +13,7 @@ import com.gatekeeper.analysisrun.AnalysisRunService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,14 @@ import org.springframework.transaction.annotation.Transactional;
  * own identity is static, configuration-derived, and always available
  * regardless of whether the call succeeded (see AIReviewProvider#modelName's
  * Javadoc).
+ * <p>
+ * <b>AIReviewFinishedEvent (Unified Engineering Report Architecture,
+ * Milestone 1).</b> Published at the end of both persistCompletedResult and
+ * persistFailedResult, in the same transaction as the AIReviewRun row -
+ * purely additive, no existing behavior above it changes.
+ * ReportGenerationListener is the only consumer; it swallows its own
+ * exceptions, so nothing about report generation can affect this method, its
+ * transaction, or AI review's own independent lifecycle.
  */
 @Slf4j
 @Service
@@ -49,6 +58,7 @@ public class AIReviewResultPersistenceService {
     private final AIReviewProvider aiReviewProvider;
     private final AIReviewRunRepository aiReviewRunRepository;
     private final AIReviewFindingRepository aiReviewFindingRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void persistCompletedResult(Long analysisRunId, AIReviewResult result) {
@@ -70,6 +80,8 @@ public class AIReviewResultPersistenceService {
 
         log.info("Persisted AI review run {} for analysis run {}: {} finding(s) from provider '{}'.",
                 aiReviewRun.getId(), analysisRunId, findingEntities.size(), aiReviewProvider.providerName());
+
+        eventPublisher.publishEvent(new AIReviewFinishedEvent(analysisRunId, AIReviewRunStatus.COMPLETED));
     }
 
     @Transactional
@@ -87,6 +99,8 @@ public class AIReviewResultPersistenceService {
 
         log.warn("Recorded failed AI review run {} for analysis run {}: {}",
                 aiReviewRun.getId(), analysisRunId, failureReason);
+
+        eventPublisher.publishEvent(new AIReviewFinishedEvent(analysisRunId, AIReviewRunStatus.FAILED));
     }
 
     private String truncate(String reason) {

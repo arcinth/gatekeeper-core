@@ -7,4 +7,8 @@ export const repositoryService = {
     const response = await apiClient.get<ApiResponse<Repository[]>>('/repositories')
     return response.data.data
   },
+
+  async remove(id: number): Promise<void> {
+    await apiClient.delete(`/repositories/${id}`)
+  },
 }

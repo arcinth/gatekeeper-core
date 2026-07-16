@@ -7,9 +7,18 @@ import { repositoryService } from '../services/repositoryService'
 import type { AnalysisRunStatus, AnalysisRunSummary } from '../types/analysisRun'
 import type { PageResponse } from '../types/api'
 import type { Repository } from '../types/repository'
+import type { VerdictOutcome } from '../types/verdict'
 
 const STATUS_OPTIONS: AnalysisRunStatus[] = ['RECEIVED', 'QUEUED', 'IN_PROGRESS', 'COMPLETED', 'FAILED']
 const PAGE_SIZE = 20
+
+// Same emerald/red governance pairing as VerdictsPage - deliberately distinct
+// from STATUS_STYLES below, so the verdict outcome never reads as "just
+// another status" (Sprint 5 Milestone 3).
+const VERDICT_STYLES: Record<VerdictOutcome, string> = {
+  APPROVED: 'bg-emerald-100 text-emerald-800',
+  BLOCKED: 'bg-red-100 text-red-800',
+}
 
 export function AnalysisRunsPage() {
   const [page, setPage] = useState<PageResponse<AnalysisRunSummary> | null>(null)
@@ -84,6 +93,7 @@ export function AnalysisRunsPage() {
                 <th className="px-4 py-2">Repository</th>
                 <th className="px-4 py-2">Pull Request</th>
                 <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Verdict</th>
                 <th className="px-4 py-2">Findings</th>
                 <th className="px-4 py-2">Created</th>
               </tr>
@@ -101,13 +111,26 @@ export function AnalysisRunsPage() {
                     <td className="px-4 py-2">
                       <StatusBadge status={run.status} />
                     </td>
+                    <td className="px-4 py-2">
+                      {run.verdictOutcome ? (
+                        <Link to={`/analysis-runs/${run.id}`}>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-bold ${VERDICT_STYLES[run.verdictOutcome]}`}
+                          >
+                            {run.verdictOutcome}
+                          </span>
+                        </Link>
+                      ) : (
+                        <span className="text-slate-400">&mdash;</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-slate-700">{run.findingsTotal}</td>
                     <td className="px-4 py-2 text-slate-500">{new Date(run.createdAt).toLocaleString()}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                  <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
                     No analysis runs found.
                   </td>
                 </tr>

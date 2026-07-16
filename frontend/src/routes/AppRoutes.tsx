@@ -4,6 +4,8 @@ import { DashboardPage } from '../pages/DashboardPage'
 import { AnalysisRunsPage } from '../pages/AnalysisRunsPage'
 import { AnalysisRunDetailPage } from '../pages/AnalysisRunDetailPage'
 import { SecurityFindingsPage } from '../pages/SecurityFindingsPage'
+import { AIReviewRunsPage } from '../pages/AIReviewRunsPage'
+import { AIReviewRunDetailPage } from '../pages/AIReviewRunDetailPage'
 import { ProtectedRoute } from './ProtectedRoute'
 
 export function AppRoutes() {
@@ -39,6 +41,22 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <SecurityFindingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ai-review-runs"
+        element={
+          <ProtectedRoute>
+            <AIReviewRunsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ai-review-runs/:id"
+        element={
+          <ProtectedRoute>
+            <AIReviewRunDetailPage />
           </ProtectedRoute>
         }
       />

@@ -19,6 +19,16 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  * Spring's default SimpleAsyncTaskExecutor, which creates an unbounded
  * thread-per-task with no backpressure - exactly wrong for a pipeline that
  * calls a rate-limited external API.
+ * <p>
+ * Also defines {@code aiReviewTaskExecutor} (Sprint 4 Milestone 3), a second,
+ * separate bounded pool for AIReviewExecutionService - deliberately not
+ * sharing {@code analysisExecutionTaskExecutor}: AI review calls a slower,
+ * external LLM provider, and the deterministic pipeline's own threads must
+ * never be starved waiting on it (Architecture.md Section 3 principle 5 - AI
+ * Review must never delay a governance decision). AIReviewExecutionService
+ * references it explicitly via {@code @Async("aiReviewTaskExecutor")}, since
+ * this class's {@link AsyncConfigurer#getAsyncExecutor()} override remains
+ * the default for any bare, unqualified {@code @Async}.
  */
 @Slf4j
 @Configuration
@@ -29,14 +39,23 @@ public class AsyncConfig implements AsyncConfigurer {
     private final int corePoolSize;
     private final int maxPoolSize;
     private final int queueCapacity;
+    private final int aiReviewCorePoolSize;
+    private final int aiReviewMaxPoolSize;
+    private final int aiReviewQueueCapacity;
 
     public AsyncConfig(
             @Value("${gatekeeper.analysis.execution.core-pool-size}") int corePoolSize,
             @Value("${gatekeeper.analysis.execution.max-pool-size}") int maxPoolSize,
-            @Value("${gatekeeper.analysis.execution.queue-capacity}") int queueCapacity) {
+            @Value("${gatekeeper.analysis.execution.queue-capacity}") int queueCapacity,
+            @Value("${gatekeeper.ai-review.execution.core-pool-size}") int aiReviewCorePoolSize,
+            @Value("${gatekeeper.ai-review.execution.max-pool-size}") int aiReviewMaxPoolSize,
+            @Value("${gatekeeper.ai-review.execution.queue-capacity}") int aiReviewQueueCapacity) {
         this.corePoolSize = corePoolSize;
         this.maxPoolSize = maxPoolSize;
         this.queueCapacity = queueCapacity;
+        this.aiReviewCorePoolSize = aiReviewCorePoolSize;
+        this.aiReviewMaxPoolSize = aiReviewMaxPoolSize;
+        this.aiReviewQueueCapacity = aiReviewQueueCapacity;
     }
 
     @Override
@@ -47,6 +66,17 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setMaxPoolSize(maxPoolSize);
         executor.setQueueCapacity(queueCapacity);
         executor.setThreadNamePrefix("analysis-exec-");
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean(name = "aiReviewTaskExecutor")
+    public Executor aiReviewTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(aiReviewCorePoolSize);
+        executor.setMaxPoolSize(aiReviewMaxPoolSize);
+        executor.setQueueCapacity(aiReviewQueueCapacity);
+        executor.setThreadNamePrefix("ai-review-exec-");
         executor.initialize();
         return executor;
     }

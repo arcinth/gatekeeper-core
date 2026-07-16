@@ -5,6 +5,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.gatekeeper.aireviewengine.AIReviewConfidence;
+import com.gatekeeper.aireviewengine.AIReviewFindingType;
+import com.gatekeeper.aireviewfinding.AIReviewFindingRepository;
+import com.gatekeeper.aireviewrun.AIReviewRunRepository;
+import com.gatekeeper.aireviewrun.AIReviewRunStatus;
 import com.gatekeeper.analysisrun.AnalysisRunRepository;
 import com.gatekeeper.analysisrun.AnalysisRunStatus;
 import com.gatekeeper.policy.PolicyCategory;
@@ -22,12 +27,15 @@ class DashboardAggregationServiceTest {
     private final AnalysisRunRepository analysisRunRepository = mock(AnalysisRunRepository.class);
     private final PolicyFindingRepository policyFindingRepository = mock(PolicyFindingRepository.class);
     private final SecurityFindingRepository securityFindingRepository = mock(SecurityFindingRepository.class);
+    private final AIReviewRunRepository aiReviewRunRepository = mock(AIReviewRunRepository.class);
+    private final AIReviewFindingRepository aiReviewFindingRepository = mock(AIReviewFindingRepository.class);
     private final RepositoryRepository repositoryRepository = mock(RepositoryRepository.class);
     private final DashboardAggregationService service = new DashboardAggregationService(
-            analysisRunRepository, policyFindingRepository, securityFindingRepository, repositoryRepository);
+            analysisRunRepository, policyFindingRepository, securityFindingRepository,
+            aiReviewRunRepository, aiReviewFindingRepository, repositoryRepository);
 
     @Test
-    void getOverview_assemblesCountsFromEachAggregateQueryIncludingSecurityFindings() {
+    void getOverview_assemblesCountsFromEachAggregateQueryIncludingSecurityAndAiReviewFindings() {
         when(repositoryRepository.count()).thenReturn(5L);
         when(analysisRunRepository.countByStatusSince(any())).thenReturn(List.of(
                 new Object[] {AnalysisRunStatus.COMPLETED, 10L},
@@ -44,6 +52,15 @@ class DashboardAggregationServiceTest {
         when(securityFindingRepository.countByCategorySince(any())).thenReturn(List.of(
                 new Object[] {SecurityCategory.SECRETS_EXPOSURE, 1L},
                 new Object[] {SecurityCategory.INSECURE_CRYPTOGRAPHY, 4L}));
+        when(aiReviewRunRepository.countByStatusSince(any())).thenReturn(List.of(
+                new Object[] {AIReviewRunStatus.COMPLETED, 6L},
+                new Object[] {AIReviewRunStatus.FAILED, 1L}));
+        when(aiReviewFindingRepository.countByConfidenceSince(any())).thenReturn(List.of(
+                new Object[] {AIReviewConfidence.HIGH, 2L},
+                new Object[] {AIReviewConfidence.LOW, 3L}));
+        when(aiReviewFindingRepository.countByTypeSince(any())).thenReturn(List.of(
+                new Object[] {AIReviewFindingType.POTENTIAL_BUG, 2L},
+                new Object[] {AIReviewFindingType.SUGGESTION, 3L}));
 
         DashboardOverviewResponse overview = service.getOverview(30);
 
@@ -57,6 +74,11 @@ class DashboardAggregationServiceTest {
         assertThat(overview.totalSecurityFindings()).isEqualTo(5L);
         assertThat(overview.securityFindingsBySeverity()).containsEntry(SecuritySeverity.CRITICAL, 1L);
         assertThat(overview.securityFindingsByCategory()).containsEntry(SecurityCategory.INSECURE_CRYPTOGRAPHY, 4L);
+        assertThat(overview.totalAiReviewRuns()).isEqualTo(7L);
+        assertThat(overview.aiReviewRunsByStatus()).containsEntry(AIReviewRunStatus.COMPLETED, 6L);
+        assertThat(overview.totalAiReviewFindings()).isEqualTo(5L);
+        assertThat(overview.aiReviewFindingsByConfidence()).containsEntry(AIReviewConfidence.HIGH, 2L);
+        assertThat(overview.aiReviewFindingsByType()).containsEntry(AIReviewFindingType.SUGGESTION, 3L);
     }
 
     @Test
@@ -67,6 +89,9 @@ class DashboardAggregationServiceTest {
         when(policyFindingRepository.countByCategorySince(any())).thenReturn(List.of());
         when(securityFindingRepository.countBySeveritySince(any())).thenReturn(List.of());
         when(securityFindingRepository.countByCategorySince(any())).thenReturn(List.of());
+        when(aiReviewRunRepository.countByStatusSince(any())).thenReturn(List.of());
+        when(aiReviewFindingRepository.countByConfidenceSince(any())).thenReturn(List.of());
+        when(aiReviewFindingRepository.countByTypeSince(any())).thenReturn(List.of());
 
         DashboardOverviewResponse overview = service.getOverview(null);
 
@@ -81,6 +106,9 @@ class DashboardAggregationServiceTest {
         when(policyFindingRepository.countByCategorySince(any())).thenReturn(List.of());
         when(securityFindingRepository.countBySeveritySince(any())).thenReturn(List.of());
         when(securityFindingRepository.countByCategorySince(any())).thenReturn(List.of());
+        when(aiReviewRunRepository.countByStatusSince(any())).thenReturn(List.of());
+        when(aiReviewFindingRepository.countByConfidenceSince(any())).thenReturn(List.of());
+        when(aiReviewFindingRepository.countByTypeSince(any())).thenReturn(List.of());
 
         DashboardOverviewResponse overview = service.getOverview(7);
 
@@ -88,5 +116,7 @@ class DashboardAggregationServiceTest {
         assertThat(overview.totalFindings()).isZero();
         assertThat(overview.runsByStatus()).isEmpty();
         assertThat(overview.totalSecurityFindings()).isZero();
+        assertThat(overview.totalAiReviewRuns()).isZero();
+        assertThat(overview.totalAiReviewFindings()).isZero();
     }
 }

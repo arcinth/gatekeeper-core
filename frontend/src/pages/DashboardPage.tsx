@@ -33,6 +33,12 @@ export function DashboardPage() {
           >
             View Security Findings
           </Link>
+          <Link
+            to="/ai-review-runs"
+            className="rounded-md border border-violet-300 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50"
+          >
+            View AI Review Runs
+          </Link>
         </div>
       </div>
 
@@ -64,6 +70,35 @@ export function DashboardPage() {
               value={overview?.securityFindingsByCategory?.SECRETS_EXPOSURE ?? 0}
             />
           </div>
+
+          <div className="mb-3 mt-8 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-900">AI Review</h2>
+            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700">
+              Advisory &middot; AI Generated
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <StatCard
+              label={`AI Review Runs (${overview?.windowDays ?? 30}d)`}
+              value={overview?.totalAiReviewRuns ?? 0}
+              tone="ai"
+            />
+            <StatCard
+              label="Failed Reviews"
+              value={overview?.aiReviewRunsByStatus?.FAILED ?? 0}
+              tone="ai-alert"
+            />
+            <StatCard
+              label={`AI Findings (${overview?.windowDays ?? 30}d)`}
+              value={overview?.totalAiReviewFindings ?? 0}
+              tone="ai"
+            />
+            <StatCard
+              label="High Confidence"
+              value={overview?.aiReviewFindingsByConfidence?.HIGH ?? 0}
+              tone="ai"
+            />
+          </div>
         </>
       )}
     </AppLayout>
@@ -77,17 +112,25 @@ function StatCard({
 }: {
   label: string
   value: number
-  tone?: 'critical' | 'high'
+  tone?: 'critical' | 'high' | 'ai' | 'ai-alert'
 }) {
   const valueClassName =
     tone === 'critical' && value > 0
       ? 'text-red-700'
       : tone === 'high' && value > 0
         ? 'text-orange-700'
-        : 'text-slate-900'
+        : tone === 'ai-alert' && value > 0
+          ? 'text-red-700'
+          : tone === 'ai'
+            ? 'text-violet-700'
+            : 'text-slate-900'
+
+  // AI-toned cards get a violet border, visually distinguishing them from the
+  // deterministic (Policy/Security) cards above (Sprint 4 Milestone 4).
+  const borderClassName = tone === 'ai' || tone === 'ai-alert' ? 'border-violet-200' : 'border-slate-200'
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+    <div className={`rounded-lg border ${borderClassName} bg-white p-6 shadow-sm`}>
       <p className="text-sm text-slate-500">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${valueClassName}`}>{value}</p>
     </div>

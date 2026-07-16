@@ -73,6 +73,31 @@ gatekeeper:
       core-pool-size: ${ANALYSIS_EXECUTION_CORE_POOL_SIZE:2}
       max-pool-size: ${ANALYSIS_EXECUTION_MAX_POOL_SIZE:8}
       queue-capacity: ${ANALYSIS_EXECUTION_QUEUE_CAPACITY:50}
+  ai-review:
+    # Off by default: an empty api-key would fail every call anyway, and the
+    # AI Review Engine is advisory-only, so there is no reason to default to
+    # "on" before an operator has deliberately supplied credentials.
+    enabled: ${AI_REVIEW_ENABLED:false}
+    anthropic:
+      base-url: ${ANTHROPIC_API_BASE_URL:https://api.anthropic.com}
+      api-key: ${ANTHROPIC_API_KEY:}
+      api-version: ${ANTHROPIC_API_VERSION:2023-06-01}
+      model: ${ANTHROPIC_MODEL:claude-opus-4-6}
+      prompt-version: ${ANTHROPIC_PROMPT_VERSION:v1}
+      connect-timeout-ms: ${ANTHROPIC_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${ANTHROPIC_READ_TIMEOUT_MS:30000}
+      retry:
+        max-attempts: ${ANTHROPIC_RETRY_MAX_ATTEMPTS:3}
+        initial-backoff-ms: ${ANTHROPIC_RETRY_INITIAL_BACKOFF_MS:500}
+        backoff-multiplier: ${ANTHROPIC_RETRY_BACKOFF_MULTIPLIER:2}
+    execution:
+      # Smaller than gatekeeper.analysis.execution's defaults: an LLM call is
+      # slower and costlier per-request than the deterministic engines, so a
+      # smaller bounded pool is a deliberate throttle, not an oversight
+      # (Sprint 4 Milestone 3 - AsyncConfig's aiReviewTaskExecutor).
+      core-pool-size: ${AI_REVIEW_EXECUTION_CORE_POOL_SIZE:1}
+      max-pool-size: ${AI_REVIEW_EXECUTION_MAX_POOL_SIZE:4}
+      queue-capacity: ${AI_REVIEW_EXECUTION_QUEUE_CAPACITY:50}
 
 springdoc:
   api-docs:

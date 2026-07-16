@@ -1,5 +1,10 @@
 package com.gatekeeper.dashboard;
 
+import com.gatekeeper.aireviewengine.AIReviewConfidence;
+import com.gatekeeper.aireviewengine.AIReviewFindingType;
+import com.gatekeeper.aireviewfinding.AIReviewFindingRepository;
+import com.gatekeeper.aireviewrun.AIReviewRunRepository;
+import com.gatekeeper.aireviewrun.AIReviewRunStatus;
 import com.gatekeeper.analysisrun.AnalysisRunRepository;
 import com.gatekeeper.analysisrun.AnalysisRunStatus;
 import com.gatekeeper.policy.PolicyCategory;
@@ -21,8 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Backs GET /api/v1/dashboard/overview. Extended for Security Findings
  * (Security Engine Architecture, Section 14) alongside the existing Policy
- * aggregation - every new count is computed by the same kind of dedicated
- * GROUP BY repository query as Policy's, never fetched-and-counted in the JVM.
+ * aggregation, and again for AI Review (Sprint 4 Milestone 4) - every new
+ * count is computed by the same kind of dedicated GROUP BY repository query
+ * as Policy's, never fetched-and-counted in the JVM.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,6 +40,8 @@ public class DashboardAggregationService {
     private final AnalysisRunRepository analysisRunRepository;
     private final PolicyFindingRepository policyFindingRepository;
     private final SecurityFindingRepository securityFindingRepository;
+    private final AIReviewRunRepository aiReviewRunRepository;
+    private final AIReviewFindingRepository aiReviewFindingRepository;
     private final RepositoryRepository repositoryRepository;
 
     public DashboardOverviewResponse getOverview(Integer windowDays) {
@@ -52,6 +60,12 @@ public class DashboardAggregationService {
                 toEnumCountMap(securityFindingRepository.countBySeveritySince(since), SecuritySeverity.class);
         Map<SecurityCategory, Long> securityFindingsByCategory =
                 toEnumCountMap(securityFindingRepository.countByCategorySince(since), SecurityCategory.class);
+        Map<AIReviewRunStatus, Long> aiReviewRunsByStatus =
+                toEnumCountMap(aiReviewRunRepository.countByStatusSince(since), AIReviewRunStatus.class);
+        Map<AIReviewConfidence, Long> aiReviewFindingsByConfidence =
+                toEnumCountMap(aiReviewFindingRepository.countByConfidenceSince(since), AIReviewConfidence.class);
+        Map<AIReviewFindingType, Long> aiReviewFindingsByType =
+                toEnumCountMap(aiReviewFindingRepository.countByTypeSince(since), AIReviewFindingType.class);
 
         return new DashboardOverviewResponse(
                 effectiveWindowDays,
@@ -63,7 +77,12 @@ public class DashboardAggregationService {
                 findingsByCategory,
                 sum(securityFindingsBySeverity),
                 securityFindingsBySeverity,
-                securityFindingsByCategory);
+                securityFindingsByCategory,
+                sum(aiReviewRunsByStatus),
+                aiReviewRunsByStatus,
+                sum(aiReviewFindingsByConfidence),
+                aiReviewFindingsByConfidence,
+                aiReviewFindingsByType);
     }
 
     @SuppressWarnings("unchecked")

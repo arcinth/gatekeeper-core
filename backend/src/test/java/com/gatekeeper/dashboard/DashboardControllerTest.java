@@ -8,6 +8,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.gatekeeper.aireviewengine.AIReviewConfidence;
+import com.gatekeeper.aireviewengine.AIReviewFindingType;
+import com.gatekeeper.aireviewrun.AIReviewRunStatus;
 import com.gatekeeper.analysisrun.AnalysisRunStatus;
 import com.gatekeeper.config.SecurityConfig;
 import com.gatekeeper.policy.PolicyCategory;
@@ -70,7 +73,12 @@ class DashboardControllerTest {
                 Map.of(PolicyCategory.MAINTAINABILITY, 5L, PolicyCategory.CODE_QUALITY, 2L),
                 3L,
                 Map.of(SecuritySeverity.CRITICAL, 1L, SecuritySeverity.HIGH, 2L),
-                Map.of(SecurityCategory.SECRETS_EXPOSURE, 1L, SecurityCategory.INSECURE_CRYPTOGRAPHY, 2L));
+                Map.of(SecurityCategory.SECRETS_EXPOSURE, 1L, SecurityCategory.INSECURE_CRYPTOGRAPHY, 2L),
+                4L,
+                Map.of(AIReviewRunStatus.COMPLETED, 3L, AIReviewRunStatus.FAILED, 1L),
+                2L,
+                Map.of(AIReviewConfidence.HIGH, 1L, AIReviewConfidence.LOW, 1L),
+                Map.of(AIReviewFindingType.SUGGESTION, 1L, AIReviewFindingType.POTENTIAL_BUG, 1L));
         when(dashboardAggregationService.getOverview(any())).thenReturn(overview);
 
         mockMvc.perform(get("/api/v1/dashboard/overview").header("Authorization", "Bearer test-token"))
@@ -78,7 +86,9 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.data.totalAnalysisRuns").value(12))
                 .andExpect(jsonPath("$.data.totalFindings").value(7))
                 .andExpect(jsonPath("$.data.windowDays").value(30))
-                .andExpect(jsonPath("$.data.totalSecurityFindings").value(3));
+                .andExpect(jsonPath("$.data.totalSecurityFindings").value(3))
+                .andExpect(jsonPath("$.data.totalAiReviewRuns").value(4))
+                .andExpect(jsonPath("$.data.totalAiReviewFindings").value(2));
     }
 
     @Test

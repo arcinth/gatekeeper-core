@@ -62,6 +62,21 @@ public class AnalysisRunService {
     }
 
     /**
+     * Read-only counterpart to markInProgress: loads the same eager
+     * pullRequest/repository/githubInstallation association graph, needed by
+     * any caller that navigates those associations after this transaction
+     * closes (see AnalysisRunRepository.findWithPullRequestAndRepositoryById),
+     * but never mutates status. Added for AIReviewExecutionService (Sprint 4
+     * Milestone 3), which must never touch AnalysisRun's own lifecycle -
+     * AI Review failures must never affect the analysis pipeline's own
+     * COMPLETED/FAILED outcome.
+     */
+    public AnalysisRun findWithPullRequestAndRepositoryByIdOrThrow(Long analysisRunId) {
+        return analysisRunRepository.findWithPullRequestAndRepositoryById(analysisRunId)
+                .orElseThrow(() -> new ResourceNotFoundException("AnalysisRun not found with id: " + analysisRunId));
+    }
+
+    /**
      * Fetches a filtered/sorted page of runs, then enriches each row with its
      * findings count via one supplementary batched query over the page's ids
      * (Milestone 5 Architecture, Section 8 / ADR-021) - deliberately not a

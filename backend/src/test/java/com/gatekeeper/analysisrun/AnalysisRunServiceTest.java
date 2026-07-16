@@ -152,6 +152,26 @@ class AnalysisRunServiceTest {
     }
 
     @Test
+    void findWithPullRequestAndRepositoryByIdOrThrow_loadsWithTheEagerAssociationGraphWithoutTouchingStatus() {
+        AnalysisRun run = AnalysisRun.builder().pullRequest(pullRequest).status(AnalysisRunStatus.QUEUED).build();
+        when(analysisRunRepository.findWithPullRequestAndRepositoryById(9L)).thenReturn(Optional.of(run));
+
+        AnalysisRun result = service.findWithPullRequestAndRepositoryByIdOrThrow(9L);
+
+        assertThat(result).isSameAs(run);
+        assertThat(result.getStatus()).isEqualTo(AnalysisRunStatus.QUEUED);
+        verify(analysisRunRepository, never()).save(any());
+    }
+
+    @Test
+    void findWithPullRequestAndRepositoryByIdOrThrow_throwsResourceNotFoundExceptionWhenMissing() {
+        when(analysisRunRepository.findWithPullRequestAndRepositoryById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.findWithPullRequestAndRepositoryByIdOrThrow(404L))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
     void markCompleted_transitionsAnAlreadyLoadedRunToCompleted() {
         AnalysisRun run = AnalysisRun.builder().pullRequest(pullRequest).status(AnalysisRunStatus.IN_PROGRESS).build();
         when(analysisRunRepository.save(run)).thenReturn(run);

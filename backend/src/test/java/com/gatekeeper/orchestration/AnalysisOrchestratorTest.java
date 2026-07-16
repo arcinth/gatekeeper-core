@@ -190,6 +190,18 @@ class AnalysisOrchestratorTest {
     }
 
     /**
+     * AI review's event is independent of the deterministic pipeline's own -
+     * both are published from the same point so AI review starts as a peer
+     * process, not a step chained after Policy/Security (Sprint 4 Milestone 3).
+     */
+    @Test
+    void handlePullRequestEvent_alsoPublishesAnAIReviewRequestedEventForANewlyCreatedRun() {
+        orchestrator.handlePullRequestEvent(payloadWithAction("opened"), DELIVERY_ID);
+
+        verify(eventPublisher).publishEvent(new AIReviewRequestedEvent(QUEUED_RUN_ID));
+    }
+
+    /**
      * createIfAbsent returning a non-RECEIVED run means a webhook redelivery
      * found a run that already went through (or is going through) the
      * pipeline - re-queuing it would run the Policy Engine a second time and

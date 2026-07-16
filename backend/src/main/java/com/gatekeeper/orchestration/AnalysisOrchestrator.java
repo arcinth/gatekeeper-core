@@ -87,6 +87,10 @@ public class AnalysisOrchestrator {
 
         AnalysisRun queued = analysisRunService.markQueued(run);
         eventPublisher.publishEvent(new AnalysisRunReadyForExecutionEvent(queued.getId()));
+        // Independent of the deterministic pipeline's own event - AI review's
+        // lifecycle is a peer process, not a step chained after Policy/Security
+        // (Sprint 4 Milestone 3; see AIReviewRequestedEvent's Javadoc).
+        eventPublisher.publishEvent(new AIReviewRequestedEvent(queued.getId()));
         log.info("AnalysisRun {} queued for execution (delivery {}).", queued.getId(), deliveryId);
     }
 

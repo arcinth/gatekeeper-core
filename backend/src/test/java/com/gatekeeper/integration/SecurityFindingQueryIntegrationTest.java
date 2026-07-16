@@ -92,6 +92,13 @@ class SecurityFindingQueryIntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
+        // @TestInstance(PER_CLASS) makes SpringExtension construct the shared
+        // test instance - and thus the ApplicationContext - before
+        // TestcontainersExtension.beforeAll() gets a chance to start POSTGRES.
+        // start() is idempotent, so calling it here guarantees the container
+        // is running before this property is ever resolved, regardless of
+        // that ordering.
+        POSTGRES.start();
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);

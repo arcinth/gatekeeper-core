@@ -112,6 +112,11 @@ class AnalysisRunAndPolicyFindingQueryIntegrationTest {
         if (!wireMockServer.isRunning()) {
             wireMockServer.start();
         }
+        // WireMock.stubFor(...) below (and elsewhere in this class) is the
+        // static DSL, which talks to an internal admin client that defaults
+        // to localhost:8080 unless told which port wireMockServer is
+        // actually running on.
+        WireMock.configureFor(wireMockServer.port());
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);

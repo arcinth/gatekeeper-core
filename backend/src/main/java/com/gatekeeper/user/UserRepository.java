@@ -7,6 +7,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
+    /**
+     * Eagerly fetches role and organization for the same reason findById(Long)
+     * below does: callers that authenticate by email (AuthService.login, and
+     * test fixtures that mint a token immediately after the lookup) read both
+     * associations right after this call returns, outside any surrounding
+     * transaction.
+     */
+    @EntityGraph(attributePaths = {"role", "organization"})
     Optional<User> findByEmailIgnoreCase(String email);
 
     boolean existsByEmailIgnoreCase(String email);

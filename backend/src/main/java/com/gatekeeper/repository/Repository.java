@@ -57,4 +57,8 @@ public class Repository extends BaseEntity {
 
     @Column(name = "default_branch")
     private String defaultBranch;
+
+    /** The GitHub owner/org login, e.g. "octocat" from full_name "octocat/gatekeeper-core". */
+    @Column(name = "owner")
+    private String owner;
 }

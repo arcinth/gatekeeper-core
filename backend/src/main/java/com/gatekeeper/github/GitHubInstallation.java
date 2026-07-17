@@ -17,9 +17,9 @@ import lombok.Setter;
 /**
  * Represents one GitHub App installation - the credential/scope boundary GitHub
  * grants when an organization installs the App (Sprint 2 Architecture, Section 3).
- * Milestone 2 only reads this table for repository-lookup validation; nothing
- * yet creates rows here, since the installation/installation_repositories
- * webhook family (repository onboarding) is a later milestone.
+ * Rows are created and updated by GitHubInstallationService in response to the
+ * "installation" webhook event; installation_repositories (which repositories
+ * an installation can see) remains a later milestone.
  */
 @Getter
 @Setter
@@ -39,4 +39,21 @@ public class GitHubInstallation extends BaseEntity {
 
     @Column(name = "github_account_login", nullable = false)
     private String githubAccountLogin;
+
+    @Column(name = "github_account_id")
+    private Long githubAccountId;
+
+    @Column(name = "github_account_type")
+    private String githubAccountType;
+
+    @Column(name = "repository_selection")
+    private String repositorySelection;
+
+    /** Raw JSON object as GitHub sent it, e.g. {"contents":"read","pull_requests":"write"}. */
+    @Column(name = "permissions")
+    private String permissions;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean active = true;
 }

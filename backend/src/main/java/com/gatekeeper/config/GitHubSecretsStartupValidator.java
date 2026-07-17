@@ -24,14 +24,17 @@ public class GitHubSecretsStartupValidator {
 
     private final String webhookSecret;
     private final String appPrivateKey;
+    private final String appPrivateKeyPath;
     private final long appId;
 
     public GitHubSecretsStartupValidator(
             @Value("${gatekeeper.github.webhook.secret}") String webhookSecret,
             @Value("${gatekeeper.github.app.private-key}") String appPrivateKey,
+            @Value("${gatekeeper.github.app.private-key-path:}") String appPrivateKeyPath,
             @Value("${gatekeeper.github.app.id}") long appId) {
         this.webhookSecret = webhookSecret;
         this.appPrivateKey = appPrivateKey;
+        this.appPrivateKeyPath = appPrivateKeyPath;
         this.appId = appId;
     }
 
@@ -42,9 +45,12 @@ public class GitHubSecretsStartupValidator {
                     "Refusing to start under the 'prod' profile: GITHUB_WEBHOOK_SECRET is still set to its "
                             + "default development value. Set it to a unique, securely generated secret.");
         }
-        if (appPrivateKey == null || appPrivateKey.isBlank()) {
+        boolean privateKeyMissing = (appPrivateKey == null || appPrivateKey.isBlank())
+                && (appPrivateKeyPath == null || appPrivateKeyPath.isBlank());
+        if (privateKeyMissing) {
             throw new IllegalStateException(
-                    "Refusing to start under the 'prod' profile: GITHUB_APP_PRIVATE_KEY is not set.");
+                    "Refusing to start under the 'prod' profile: neither GITHUB_APP_PRIVATE_KEY nor "
+                            + "GITHUB_APP_PRIVATE_KEY_PATH is set.");
         }
         if (appId <= 0) {
             throw new IllegalStateException(

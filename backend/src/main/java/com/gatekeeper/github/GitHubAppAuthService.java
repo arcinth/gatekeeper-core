@@ -2,6 +2,9 @@ package com.gatekeeper.github;
 
 import com.gatekeeper.github.dto.InstallationAccessTokenResponse;
 import io.jsonwebtoken.Jwts;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.PrivateKey;
 import java.time.Clock;
 import java.time.Duration;
@@ -42,11 +45,33 @@ public class GitHubAppAuthService {
             GitHubApiClient gitHubApiClient,
             Clock clock,
             @Value("${gatekeeper.github.app.id}") long appId,
-            @Value("${gatekeeper.github.app.private-key}") String privateKeyPem) {
+            @Value("${gatekeeper.github.app.private-key}") String privateKeyPem,
+            @Value("${gatekeeper.github.app.private-key-path:}") String privateKeyPath) {
         this.gitHubApiClient = gitHubApiClient;
         this.clock = clock;
         this.appId = appId;
-        this.privateKeyPem = privateKeyPem;
+        this.privateKeyPem = resolvePrivateKeyPem(privateKeyPem, privateKeyPath);
+    }
+
+    /**
+     * private-key-path wins when set - reading the PEM file once at startup,
+     * the same "resolve once, fail fast if broken" approach as the rest of
+     * this project's startup-time config (see GitHubSecretsStartupValidator).
+     * Falls back to the raw private-key value otherwise, so existing
+     * deployments and tests that set GITHUB_APP_PRIVATE_KEY directly are
+     * unaffected.
+     */
+    private static String resolvePrivateKeyPem(String privateKeyPem, String privateKeyPath) {
+        if (privateKeyPath == null || privateKeyPath.isBlank()) {
+            return privateKeyPem;
+        }
+        try {
+            return Files.readString(Path.of(privateKeyPath));
+        } catch (IOException ex) {
+            throw new IllegalStateException(
+                    "GITHUB_APP_PRIVATE_KEY_PATH is set to '" + privateKeyPath
+                            + "' but the file could not be read.", ex);
+        }
     }
 
     /**

@@ -143,7 +143,8 @@ All variables below are read by the backend (`application.yml`). None are requir
 | Variable | Default | Purpose |
 |---|---|---|
 | `GITHUB_APP_ID` | `0` (treated as unset) | GitHub App ID. |
-| `GITHUB_APP_PRIVATE_KEY` | empty | GitHub App private key, PKCS#8 PEM format. GitHub issues PKCS#1 by default — convert with `openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in <downloaded-key>.pem -out <pkcs8-key>.pem`. |
+| `GITHUB_APP_PRIVATE_KEY` | empty | GitHub App private key, PKCS#8 PEM format, as the raw PEM content. GitHub issues PKCS#1 by default — convert with `openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in <downloaded-key>.pem -out <pkcs8-key>.pem`. |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | empty | Path to a PEM file on disk, as an alternative to `GITHUB_APP_PRIVATE_KEY` — preferred for real use, since a multi-line key is awkward as one env var value. Takes precedence over `GITHUB_APP_PRIVATE_KEY` when set. See `secrets/README.md`. |
 | `GITHUB_WEBHOOK_SECRET` | a committed development value | Used to verify the `X-Hub-Signature-256` header on inbound webhooks. |
 | `GITHUB_API_BASE_URL` | `https://api.github.com` | Overridable for testing against a mock GitHub API. |
 | `GITHUB_API_RETRY_MAX_ATTEMPTS` | `3` | Retry attempts for transient GitHub API failures. |
@@ -188,7 +189,7 @@ It only ever creates the account once. If the account already exists — includi
 
 Three separate startup validators exist to stop an unrotated default from reaching a real deployment: `JwtSecretStartupValidator`, `GitHubSecretsStartupValidator`, and `BootstrapAdminStartupValidator`. Each is a `@Component` scoped to `@Profile("prod")`, running a `@PostConstruct` check that throws `IllegalStateException` if its corresponding value still matches the one committed in `application.yml`. They don't exist as beans at all under `local` or `dev` — under those profiles, the application boots regardless of what these values are set to.
 
-In practice, this means: local development works out of the box with every default in place, but starting the application with `SPRING_PROFILES_ACTIVE=prod` fails immediately, before the application is reachable, unless `JWT_SECRET`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_ID`, and `BOOTSTRAP_ADMIN_PASSWORD` have all been changed from their defaults.
+In practice, this means: local development works out of the box with every default in place, but starting the application with `SPRING_PROFILES_ACTIVE=prod` fails immediately, before the application is reachable, unless `JWT_SECRET`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_ID`, `BOOTSTRAP_ADMIN_PASSWORD`, and one of `GITHUB_APP_PRIVATE_KEY`/`GITHUB_APP_PRIVATE_KEY_PATH` have all been changed from their defaults.
 
 The reason this matters for the bootstrap password specifically: it's a plaintext value committed to a public repository. Anyone who can read this codebase can read it. An administrator account — full access to every repository, every user, and every governance decision GateKeeper has recorded — should not be reachable with a password that ships in source control.
 

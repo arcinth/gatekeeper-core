@@ -14,7 +14,7 @@ class GitHubSecretsStartupValidatorTest {
 
     @Test
     void validate_throwsWhenWebhookSecretIsStillTheDefault() {
-        var validator = new GitHubSecretsStartupValidator(DEFAULT_WEBHOOK_SECRET, REAL_PRIVATE_KEY, 42L);
+        var validator = new GitHubSecretsStartupValidator(DEFAULT_WEBHOOK_SECRET, REAL_PRIVATE_KEY, "", 42L);
 
         assertThatThrownBy(validator::validate)
                 .isInstanceOf(IllegalStateException.class)
@@ -22,8 +22,8 @@ class GitHubSecretsStartupValidatorTest {
     }
 
     @Test
-    void validate_throwsWhenPrivateKeyIsBlank() {
-        var validator = new GitHubSecretsStartupValidator(REAL_WEBHOOK_SECRET, "", 42L);
+    void validate_throwsWhenPrivateKeyAndPrivateKeyPathAreBothBlank() {
+        var validator = new GitHubSecretsStartupValidator(REAL_WEBHOOK_SECRET, "", "", 42L);
 
         assertThatThrownBy(validator::validate)
                 .isInstanceOf(IllegalStateException.class)
@@ -31,17 +31,25 @@ class GitHubSecretsStartupValidatorTest {
     }
 
     @Test
-    void validate_throwsWhenPrivateKeyIsNull() {
-        var validator = new GitHubSecretsStartupValidator(REAL_WEBHOOK_SECRET, null, 42L);
+    void validate_throwsWhenPrivateKeyIsNullAndPrivateKeyPathIsBlank() {
+        var validator = new GitHubSecretsStartupValidator(REAL_WEBHOOK_SECRET, null, "", 42L);
 
         assertThatThrownBy(validator::validate)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("GITHUB_APP_PRIVATE_KEY");
+    }
+
+    @Test
+    void validate_passesWhenPrivateKeyPathIsSetEvenIfPrivateKeyIsBlank() {
+        var validator = new GitHubSecretsStartupValidator(
+                REAL_WEBHOOK_SECRET, "", "/secrets/github-app-private-key.pem", 42L);
+
+        assertThatCode(validator::validate).doesNotThrowAnyException();
     }
 
     @Test
     void validate_throwsWhenAppIdIsUnset() {
-        var validator = new GitHubSecretsStartupValidator(REAL_WEBHOOK_SECRET, REAL_PRIVATE_KEY, 0L);
+        var validator = new GitHubSecretsStartupValidator(REAL_WEBHOOK_SECRET, REAL_PRIVATE_KEY, "", 0L);
 
         assertThatThrownBy(validator::validate)
                 .isInstanceOf(IllegalStateException.class)
@@ -50,7 +58,7 @@ class GitHubSecretsStartupValidatorTest {
 
     @Test
     void validate_passesWhenEverythingIsProperlyConfigured() {
-        var validator = new GitHubSecretsStartupValidator(REAL_WEBHOOK_SECRET, REAL_PRIVATE_KEY, 42L);
+        var validator = new GitHubSecretsStartupValidator(REAL_WEBHOOK_SECRET, REAL_PRIVATE_KEY, "", 42L);
 
         assertThatCode(validator::validate).doesNotThrowAnyException();
     }

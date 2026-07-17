@@ -54,7 +54,13 @@ gatekeeper:
       id: ${GITHUB_APP_ID:0}
       # PKCS#8 PEM ("-----BEGIN PRIVATE KEY-----"). GitHub issues PKCS#1 keys by default; convert with:
       # openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in <downloaded-key>.pem -out <pkcs8-key>.pem
+      #
+      # Two ways to supply it - GitHubAppAuthService prefers private-key-path when set:
+      #   - private-key: the PEM content itself, as a single environment variable value.
+      #   - private-key-path: a path to a PEM file on disk (see secrets/README.md). Preferred for
+      #     real deployments, since a multi-line key is awkward to carry as one env var value.
       private-key: ${GITHUB_APP_PRIVATE_KEY:}
+      private-key-path: ${GITHUB_APP_PRIVATE_KEY_PATH:}
     webhook:
       # If this default ever changes, update GitHubSecretsStartupValidator.DEFAULT_WEBHOOK_SECRET to match -
       # it fails startup under prod if GITHUB_WEBHOOK_SECRET still resolves to this value.

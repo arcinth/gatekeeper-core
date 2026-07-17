@@ -48,7 +48,7 @@ Start it with:
 docker compose up -d postgres
 ```
 
-By default this starts PostgreSQL on port 5432 with database `gatekeeper` and user/password `gatekeeper`/`gatekeeper` — the same defaults the backend's own `application.yml` expects, so the two line up without any configuration on a clean checkout. If you want different credentials or a different port, copy `.env.example` to `.env` and edit `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, or `DB_PORT`; `docker compose` reads `.env` automatically.
+By default this starts PostgreSQL on host port 5433 (mapped to the container's standard 5432) with database `gatekeeper` and user/password `gatekeeper`/`gatekeeper` — the same defaults the backend's own `application.yml` expects, so the two line up without any configuration on a clean checkout. Port 5433 rather than the Postgres-standard 5432 is deliberate: 5432 is a common default for other, unrelated local Postgres instances, and picking 5433 means GateKeeper's container doesn't fight another project for the port. If you want different credentials or a different port, copy `.env.example` to `.env` and edit `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, or `DB_PORT`; `docker compose` reads `.env` automatically.
 
 One thing to know about that named volume: PostgreSQL only applies `POSTGRES_USER`/`POSTGRES_PASSWORD` the *first* time it initializes an empty data directory. If you start the container once, then change the credentials in `.env` and restart, PostgreSQL won't pick up the change — the old credentials are already baked into the volume. Remove the volume (`docker compose down -v`) if you need to reset credentials from scratch.
 
@@ -122,7 +122,7 @@ All variables below are read by the backend (`application.yml`). None are requir
 | Variable | Default | Purpose |
 |---|---|---|
 | `SPRING_PROFILES_ACTIVE` | `local` | Selects `local`, `dev`, or `prod`. |
-| `DB_URL` | `jdbc:postgresql://localhost:5432/gatekeeper` | JDBC connection string. |
+| `DB_URL` | `jdbc:postgresql://localhost:5433/gatekeeper` | JDBC connection string. |
 | `DB_USERNAME` | `gatekeeper` | Database user. |
 | `DB_PASSWORD` | `gatekeeper` | Database password. |
 | `SERVER_PORT` | `8080` | Backend HTTP port. |
@@ -242,7 +242,7 @@ There is no automated frontend test suite (no Jest, Vitest, or Playwright config
 
 **"Could not find a valid Docker environment" when running backend tests.** Testcontainers can't reach a Docker daemon from the test process. Confirm `docker info` works from the same shell/user context Maven runs in. This only affects the six integration tests listed above — the rest of the suite doesn't need Docker.
 
-**Port 5432 already in use.** Something else on your machine is already bound to PostgreSQL's default port. Set `DB_PORT` in `.env` (or export it before running `docker compose up`) to a free port, and update `DB_URL` to match if you're running the backend outside of `docker compose`.
+**Port 5433 already in use.** Something else on your machine is already bound to it (uncommon, but possible if you're running more than one project that made the same choice to avoid 5432). Set `DB_PORT` in `.env` (or export it before running `docker compose up`) to a free port, and update `DB_URL` to match if you're running the backend outside of `docker compose`.
 
 **Database authentication fails after editing `.env`.** As noted in [Database Setup](#database-setup), PostgreSQL only applies its user/password on first initialization of an empty data directory. Changing `.env` after the `postgres-data` volume already exists won't change the running database's credentials. Run `docker compose down -v` to remove the volume and start over, or update the credentials inside the running database directly.
 

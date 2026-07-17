@@ -8,8 +8,12 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.gatekeeper.github.dto.CheckRunOutput;
+import com.gatekeeper.github.dto.CheckRunResponse;
+import com.gatekeeper.github.dto.CreateCheckRunRequest;
 import com.gatekeeper.github.dto.GitHubFileChange;
 import com.gatekeeper.github.dto.InstallationAccessTokenResponse;
+import com.gatekeeper.github.dto.UpdateCheckRunRequest;
 import com.gatekeeper.github.exception.GitHubApiException;
 import com.gatekeeper.github.exception.GitHubTransientApiException;
 import java.time.Instant;
@@ -164,6 +168,71 @@ class GitHubApiClientTest {
     void fetchPullRequestFiles_rejectsARepositoryFullNameWithoutASlash() {
         assertThatThrownBy(() -> client.fetchPullRequestFiles("no-slash", 7, "token"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void createCheckRun_parsesTheCreatedCheckRunId() {
+        Instant now = Instant.parse("2026-07-18T12:00:00Z");
+        CreateCheckRunRequest request = new CreateCheckRunRequest(
+                "GateKeeper", "abc123", "completed", "success", now, now,
+                new CheckRunOutput("Verdict: APPROVED", "No findings."));
+
+        mockServer.expect(requestTo(BASE_URL + "/repos/gatekeeper/core/check-runs"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer installation-token"))
+                .andRespond(withStatus(HttpStatus.CREATED)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"id\":555666}"));
+
+        CheckRunResponse response = client.createCheckRun("gatekeeper/core", request, "installation-token");
+
+        assertThat(response.id()).isEqualTo(555666L);
+    }
+
+    @Test
+    void createCheckRun_wrapsAnErrorResponseAsGitHubApiException() {
+        CreateCheckRunRequest request = new CreateCheckRunRequest(
+                "GateKeeper", "abc123", "completed", "success", Instant.now(), Instant.now(), null);
+        mockServer.expect(requestTo(BASE_URL + "/repos/gatekeeper/core/check-runs"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> client.createCheckRun("gatekeeper/core", request, "installation-token"))
+                .isInstanceOf(GitHubApiException.class)
+                .hasMessageContaining("403");
+    }
+
+    @Test
+    void createCheckRun_rejectsARepositoryFullNameWithoutASlash() {
+        CreateCheckRunRequest request = new CreateCheckRunRequest(
+                "GateKeeper", "abc123", "completed", "success", Instant.now(), Instant.now(), null);
+
+        assertThatThrownBy(() -> client.createCheckRun("no-slash", request, "token"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void updateCheckRun_sendsAPatchToTheCheckRunsIdEndpoint() {
+        UpdateCheckRunRequest request = new UpdateCheckRunRequest(
+                "completed", "failure", Instant.parse("2026-07-18T12:05:00Z"),
+                new CheckRunOutput("Verdict: BLOCKED", "1 blocking finding."));
+
+        mockServer.expect(requestTo(BASE_URL + "/repos/gatekeeper/core/check-runs/555666"))
+                .andExpect(method(HttpMethod.PATCH))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer installation-token"))
+                .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body("{}"));
+
+        client.updateCheckRun("gatekeeper/core", 555666L, request, "installation-token");
+    }
+
+    @Test
+    void updateCheckRun_wrapsAnErrorResponseAsGitHubApiException() {
+        UpdateCheckRunRequest request = new UpdateCheckRunRequest("completed", "failure", Instant.now(), null);
+        mockServer.expect(requestTo(BASE_URL + "/repos/gatekeeper/core/check-runs/555666"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThatThrownBy(() -> client.updateCheckRun("gatekeeper/core", 555666L, request, "installation-token"))
+                .isInstanceOf(GitHubApiException.class)
+                .hasMessageContaining("404");
     }
 
     private String fullPageOfFilesJson(int count) {

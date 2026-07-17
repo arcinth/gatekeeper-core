@@ -53,4 +53,8 @@ public class AnalysisRun extends BaseEntity {
     /** Populated only when status is FAILED; null otherwise. */
     @Column(name = "failure_reason", length = 2000)
     private String failureReason;
+
+    /** GitHub's check run id, once GitHubCheckRunService has created one; null until then. */
+    @Column(name = "github_check_run_id")
+    private Long githubCheckRunId;
 }

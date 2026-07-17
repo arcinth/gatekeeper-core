@@ -1,7 +1,10 @@
 package com.gatekeeper.github;
 
+import com.gatekeeper.github.dto.CheckRunResponse;
+import com.gatekeeper.github.dto.CreateCheckRunRequest;
 import com.gatekeeper.github.dto.GitHubFileChange;
 import com.gatekeeper.github.dto.InstallationAccessTokenResponse;
+import com.gatekeeper.github.dto.UpdateCheckRunRequest;
 import com.gatekeeper.github.exception.GitHubApiException;
 import com.gatekeeper.github.exception.GitHubTransientApiException;
 import java.util.ArrayList;
@@ -105,6 +108,76 @@ public class GitHubApiClient {
             return allFiles.subList(0, maxChangedFilesPerPullRequest);
         }
         return allFiles;
+    }
+
+    /**
+     * Creates a GitHub Check Run for one commit. Returns the response so the
+     * caller can remember its id - GitHub has no "find the check run for this
+     * commit" lookup, so the id must be stored by whoever creates it (see
+     * AnalysisRun.githubCheckRunId).
+     */
+    public CheckRunResponse createCheckRun(
+            String repositoryFullName, CreateCheckRunRequest request, String installationAccessToken) {
+        String[] ownerAndRepo = splitOwnerAndRepoForCheckRuns(repositoryFullName);
+        String owner = ownerAndRepo[0];
+        String repo = ownerAndRepo[1];
+        try {
+            return restClient.post()
+                    .uri("/repos/{owner}/{repo}/check-runs", owner, repo)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationAccessToken)
+                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .body(request)
+                    .retrieve()
+                    .body(CheckRunResponse.class);
+        } catch (RestClientResponseException ex) {
+            throw new GitHubApiException(
+                    "GitHub rejected creating a check run for " + repositoryFullName
+                            + " (HTTP " + ex.getStatusCode().value() + ").", ex);
+        } catch (RestClientException ex) {
+            throw new GitHubApiException(
+                    "Failed to reach GitHub while creating a check run for " + repositoryFullName + ".", ex);
+        }
+    }
+
+    /** Updates a previously created Check Run - GateKeeper only ever moves one forward, never deletes it. */
+    public void updateCheckRun(
+            String repositoryFullName, long checkRunId, UpdateCheckRunRequest request, String installationAccessToken) {
+        String[] ownerAndRepo = splitOwnerAndRepoForCheckRuns(repositoryFullName);
+        String owner = ownerAndRepo[0];
+        String repo = ownerAndRepo[1];
+        try {
+            restClient.patch()
+                    .uri("/repos/{owner}/{repo}/check-runs/{checkRunId}", owner, repo, checkRunId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationAccessToken)
+                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .body(request)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException ex) {
+            throw new GitHubApiException(
+                    "GitHub rejected updating check run " + checkRunId + " for " + repositoryFullName
+                            + " (HTTP " + ex.getStatusCode().value() + ").", ex);
+        } catch (RestClientException ex) {
+            throw new GitHubApiException(
+                    "Failed to reach GitHub while updating check run " + checkRunId
+                            + " for " + repositoryFullName + ".", ex);
+        }
+    }
+
+    /**
+     * Duplicates fetchPullRequestFiles's own owner/repo split rather than
+     * extracting one shared private helper both use - deliberately, to avoid
+     * touching that existing, already-tested method's body for this change.
+     */
+    private String[] splitOwnerAndRepoForCheckRuns(String repositoryFullName) {
+        String[] ownerAndRepo = repositoryFullName.split("/", 2);
+        if (ownerAndRepo.length != 2) {
+            throw new IllegalArgumentException(
+                    "repositoryFullName must be in 'owner/repo' form, got: " + repositoryFullName);
+        }
+        return ownerAndRepo;
     }
 
     private List<GitHubFileChange> fetchFilesPage(

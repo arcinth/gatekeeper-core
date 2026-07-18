@@ -15,11 +15,13 @@ import com.gatekeeper.verdict.VerdictReasonEntity;
 import com.gatekeeper.verdict.VerdictReasonRepository;
 import com.gatekeeper.verdict.VerdictRepository;
 import com.gatekeeper.verdictengine.VerdictOutcome;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Session;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,6 +67,8 @@ public class GitHubCheckRunService {
     private final GitHubAppAuthService gitHubAppAuthService;
     private final GitHubApiClient gitHubApiClient;
     private final Clock clock;
+    // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+    private final EntityManager entityManager;
 
     public GitHubCheckRunService(
             @Value("${gatekeeper.github.check-run.name}") String checkRunName,
@@ -74,7 +78,8 @@ public class GitHubCheckRunService {
             VerdictReasonRepository verdictReasonRepository,
             GitHubAppAuthService gitHubAppAuthService,
             GitHubApiClient gitHubApiClient,
-            Clock clock) {
+            Clock clock,
+            EntityManager entityManager) {
         this.checkRunName = checkRunName;
         this.analysisRunService = analysisRunService;
         this.analysisRunRepository = analysisRunRepository;
@@ -83,6 +88,7 @@ public class GitHubCheckRunService {
         this.gitHubAppAuthService = gitHubAppAuthService;
         this.gitHubApiClient = gitHubApiClient;
         this.clock = clock;
+        this.entityManager = entityManager;
     }
 
     @Transactional
@@ -136,13 +142,54 @@ public class GitHubCheckRunService {
         CheckRunResponse response = gitHubApiClient.createCheckRun(
                 repository.getFullName(), request, installationAccessToken);
         // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
-        log.info("DIAGNOSTIC: gitHubApiClient.createCheckRun returned id {} (analysis run {}).",
-                response.id(), analysisRun.getId());
+        log.info("DIAGNOSTIC: response.id() = {} (analysis run {}).", response.id(), analysisRun.getId());
+
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        // Checked before mutating anything: if the session is already in a
+        // read-only state (or this specific entity is), Hibernate's dirty
+        // checking silently skips generating an UPDATE for it at flush time -
+        // setGithubCheckRunId below would succeed, save() would succeed, and
+        // commit would succeed, all with no exception, yet nothing would reach
+        // Postgres. This is the one mechanism that fits every fact gathered so
+        // far: HTTP call succeeds, no exception anywhere, value never persists.
+        Session hibernateSession = entityManager.unwrap(Session.class);
+        log.info("DIAGNOSTIC: session.isDefaultReadOnly()={}, session.getHibernateFlushMode()={}, "
+                        + "session.isReadOnly(analysisRun)={} (analysis run {}).",
+                hibernateSession.isDefaultReadOnly(), hibernateSession.getHibernateFlushMode(),
+                hibernateSession.isReadOnly(analysisRun), analysisRun.getId());
 
         analysisRun.setGithubCheckRunId(response.id());
-        analysisRunRepository.save(analysisRun);
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        log.info("DIAGNOSTIC: after setGithubCheckRunId, analysisRun.getGithubCheckRunId() = {} (analysis run {}).",
+                analysisRun.getGithubCheckRunId(), analysisRun.getId());
+
+        AnalysisRun saved = analysisRunRepository.save(analysisRun);
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        log.info("DIAGNOSTIC: after save(), saved.getGithubCheckRunId() = {}, saved == analysisRun: {} "
+                        + "(analysis run {}).",
+                saved.getGithubCheckRunId(), saved == analysisRun, analysisRun.getId());
+
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        // flush() forces Hibernate to issue the UPDATE now, inside this same
+        // transaction/connection, rather than waiting for commit. clear() then
+        // evicts everything from the persistence context so the reload below
+        // issues a genuine SELECT instead of returning the same cached instance
+        // from the first-level cache - only a real SELECT proves the value is
+        // actually visible in Postgres (via this transaction's own connection,
+        // which sees its own uncommitted writes) rather than just proving the
+        // in-memory Java object was mutated.
+        Long analysisRunId = analysisRun.getId();
+        analysisRunRepository.flush();
+        entityManager.clear();
+        Long reloadedCheckRunId = analysisRunRepository.findById(analysisRunId)
+                .map(AnalysisRun::getGithubCheckRunId)
+                .orElse(null);
+        log.info("DIAGNOSTIC: after flush()+clear()+reload by id, githubCheckRunId visible in DB "
+                        + "(same transaction) = {} (analysis run {}).",
+                reloadedCheckRunId, analysisRunId);
+
         log.info("Created GitHub check run {} for analysis run {} (conclusion={}).",
-                response.id(), analysisRun.getId(), conclusion);
+                response.id(), analysisRunId, conclusion);
     }
 
     private void update(AnalysisRun analysisRun, Repository repository, String conclusion, CheckRunOutput output,

@@ -18,6 +18,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 
 class GitHubInstallationServiceTest {
 
@@ -26,9 +27,10 @@ class GitHubInstallationServiceTest {
 
     private final GitHubInstallationRepository gitHubInstallationRepository = mock(GitHubInstallationRepository.class);
     private final OrganizationService organizationService = mock(OrganizationService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final Organization organization = Organization.builder().name("Default Organization").build();
-    private final GitHubInstallationService service =
-            new GitHubInstallationService(gitHubInstallationRepository, organizationService, new ObjectMapper());
+    private final GitHubInstallationService service = new GitHubInstallationService(
+            gitHubInstallationRepository, organizationService, new ObjectMapper(), eventPublisher);
 
     @BeforeEach
     void setUp() {
@@ -54,6 +56,11 @@ class GitHubInstallationServiceTest {
         assertThat(installation.getRepositorySelection()).isEqualTo("all");
         assertThat(installation.getPermissions()).isEqualTo("{\"contents\":\"read\"}");
         assertThat(installation.isActive()).isTrue();
+
+        ArgumentCaptor<InstallationRepositorySyncRequestedEvent> published =
+                ArgumentCaptor.forClass(InstallationRepositorySyncRequestedEvent.class);
+        verify(eventPublisher).publishEvent(published.capture());
+        assertThat(published.getValue().installationId()).isEqualTo(INSTALLATION_ID);
     }
 
     @Test
@@ -94,6 +101,7 @@ class GitHubInstallationServiceTest {
         assertThat(existing.isActive()).isFalse();
         verify(gitHubInstallationRepository).save(existing);
         verify(organizationService, never()).getDefaultOrganization();
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

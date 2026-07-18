@@ -25,6 +25,7 @@ import com.gatekeeper.github.dto.PullRequestWebhookPayload.InstallationData;
 import com.gatekeeper.github.dto.PullRequestWebhookPayload.PullRequestData;
 import com.gatekeeper.github.dto.PullRequestWebhookPayload.RepositoryData;
 import com.gatekeeper.github.dto.PullRequestWebhookPayload.UserData;
+import com.gatekeeper.orchestration.GitHubCheckRunService;
 import com.gatekeeper.pullrequest.PullRequest;
 import com.gatekeeper.pullrequest.PullRequestRepository;
 import com.gatekeeper.repository.Repository;
@@ -146,6 +147,9 @@ class InstallationOnboardingIntegrationTest {
     private VerdictRepository verdictRepository;
 
     @Autowired
+    private GitHubCheckRunService gitHubCheckRunService;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Value("${gatekeeper.github.webhook.secret}")
@@ -250,6 +254,7 @@ class InstallationOnboardingIntegrationTest {
             Optional<AnalysisRun> run = pullRequest.flatMap(pr ->
                     analysisRunRepository.findByPullRequestIdAndCommitSha(pr.getId(), "sha-onboarding"));
             facts.put("analysisRunExists", run.isPresent());
+            facts.put("analysisRunId", run.map(AnalysisRun::getId).orElse(null));
             facts.put("analysisRunStatus", run.map(AnalysisRun::getStatus).map(Object::toString).orElse(null));
             facts.put("analysisRunCheckRunId", run.map(AnalysisRun::getGithubCheckRunId).orElse(null));
             facts.put("analysisRunFailureReason", run.map(AnalysisRun::getFailureReason).orElse(null));
@@ -302,9 +307,37 @@ class InstallationOnboardingIntegrationTest {
         report.append("All requests:\n");
         allRequests.forEach(request -> report.append(request).append('\n'));
 
+        report.append("\n=== DIRECT RE-INVOCATION ===\n\n");
+        report.append(reinvokePublishForVerdict(facts)).append('\n');
+
         report.append("\n=== CONCLUSION ===\n");
         report.append("Last confirmed successful checkpoint: ").append(lastSuccessfulCheckpoint(facts, checkRunCalls));
         return report.toString();
+    }
+
+    /**
+     * Calls the exact same GitHubCheckRunService.publishForVerdict(...) bean
+     * method GitHubCheckRunPublisher calls - but directly, bypassing that
+     * listener's own try/catch entirely. If a real exception is being thrown and
+     * silently swallowed there (its log.error output isn't visible in this CI
+     * job's summary), it surfaces here instead, uncaught, in the test's own
+     * failure output. Only attempted if githubCheckRunId is still null - if it's
+     * already set, there's nothing left to reproduce.
+     */
+    private String reinvokePublishForVerdict(Map<String, Object> facts) {
+        if (!Boolean.TRUE.equals(facts.get("analysisRunExists")) || facts.get("analysisRunCheckRunId") != null) {
+            return "Skipped (no AnalysisRun to retry, or githubCheckRunId is already set).";
+        }
+        Long analysisRunId = (Long) facts.get("analysisRunId");
+        try {
+            gitHubCheckRunService.publishForVerdict(analysisRunId);
+            return "publishForVerdict(" + analysisRunId + ") returned normally on direct re-invocation "
+                    + "(no exception) - re-check githubCheckRunId after this report.";
+        } catch (RuntimeException ex) {
+            java.io.StringWriter stackTrace = new java.io.StringWriter();
+            ex.printStackTrace(new java.io.PrintWriter(stackTrace));
+            return "publishForVerdict(" + analysisRunId + ") THREW on direct re-invocation:\n" + stackTrace;
+        }
     }
 
     /**

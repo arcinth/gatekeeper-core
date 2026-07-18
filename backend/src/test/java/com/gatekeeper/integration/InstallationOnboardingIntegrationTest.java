@@ -38,7 +38,9 @@ import java.util.HexFormat;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,6 +77,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * runs -&gt; VerdictProducedEvent -&gt; GitHubCheckRunService publishes a
  * Check Run.
  */
+@Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @Testcontainers
@@ -205,13 +208,31 @@ class InstallationOnboardingIntegrationTest {
 
         // pull_request analysis: PullRequest persisted, AnalysisRun reaches COMPLETED,
         // and (VerdictProducedEvent having fired) a GitHub Check Run is published.
-        Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            PullRequest pullRequest = pullRequestRepository.findByGithubPrId(githubPrId).orElseThrow();
-            var run = analysisRunRepository.findByPullRequestIdAndCommitSha(pullRequest.getId(), "sha-onboarding")
-                    .orElseThrow();
-            assertThat(run.getStatus()).isEqualTo(AnalysisRunStatus.COMPLETED);
-            assertThat(run.getGithubCheckRunId()).isEqualTo(9988L);
-        });
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        // On timeout, dump WireMock's own request log (independent of application
+        // logging) so it's clear whether the access-token and/or check-run calls were
+        // ever actually attempted, before rethrowing so the test still fails normally.
+        try {
+            Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+                PullRequest pullRequest = pullRequestRepository.findByGithubPrId(githubPrId).orElseThrow();
+                var run = analysisRunRepository.findByPullRequestIdAndCommitSha(pullRequest.getId(), "sha-onboarding")
+                        .orElseThrow();
+                assertThat(run.getStatus()).isEqualTo(AnalysisRunStatus.COMPLETED);
+                assertThat(run.getGithubCheckRunId()).isEqualTo(9988L);
+            });
+        } catch (ConditionTimeoutException ex) {
+            log.error("DIAGNOSTIC: timed out waiting for the check run. WireMock received {} request(s) total: {}",
+                    wireMockServer.getAllServeEvents().size(),
+                    wireMockServer.getAllServeEvents().stream()
+                            .map(event -> event.getRequest().getMethod() + " " + event.getRequest().getUrl())
+                            .toList());
+            log.error("DIAGNOSTIC: access-token POSTs received: {}; check-run POSTs received: {}",
+                    wireMockServer.findAll(postRequestedFor(
+                            urlPathEqualTo("/app/installations/" + INSTALLATION_ID + "/access_tokens"))).size(),
+                    wireMockServer.findAll(postRequestedFor(
+                            urlPathEqualTo("/repos/" + REPOSITORY_FULL_NAME + "/check-runs"))).size());
+            throw ex;
+        }
         wireMockServer.verify(1, postRequestedFor(urlPathEqualTo("/repos/" + REPOSITORY_FULL_NAME + "/check-runs")));
     }
 

@@ -109,6 +109,8 @@ public class AnalysisResultPersistenceService {
                 policyEntities.size(), securityEntities.size(), verdictResult.outcome(), analysisRunId);
 
         eventPublisher.publishEvent(new VerdictProducedEvent(analysisRunId));
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        log.info("DIAGNOSTIC: VerdictProducedEvent published for analysis run {}.", analysisRunId);
     }
 
     private VerdictResult evaluateVerdict(AnalysisRun analysisRun, PolicyResult policyResult, SecurityResult securityResult) {

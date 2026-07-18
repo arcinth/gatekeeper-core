@@ -87,24 +87,36 @@ public class GitHubCheckRunService {
 
     @Transactional
     public void publishForVerdict(Long analysisRunId) {
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        log.info("DIAGNOSTIC: publishForVerdict entered for analysis run {}.", analysisRunId);
         AnalysisRun analysisRun = analysisRunService.findWithPullRequestAndRepositoryByIdOrThrow(analysisRunId);
         Repository repository = analysisRun.getPullRequest().getRepository();
         if (repository.getGithubInstallation() == null) {
-            log.info("Analysis run {} has no linked GitHub installation; skipping check run publication.",
+            log.info("DIAGNOSTIC: Analysis run {} has no linked GitHub installation; skipping check run publication.",
                     analysisRunId);
             return;
         }
 
         Verdict verdict = verdictRepository.findByAnalysisRunId(analysisRunId).orElse(null);
         if (verdict == null) {
-            log.warn("No Verdict found for analysis run {} when publishing its check run; skipping.", analysisRunId);
+            log.warn("DIAGNOSTIC: No Verdict found for analysis run {} when publishing its check run; skipping.",
+                    analysisRunId);
             return;
         }
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        log.info("DIAGNOSTIC: Analysis run {} passed both skip checks (installation={}, verdict={}); "
+                        + "proceeding to call GitHub.",
+                analysisRunId, repository.getGithubInstallation().getInstallationId(), verdict.getOutcome());
 
         String conclusion = verdict.getOutcome() == VerdictOutcome.APPROVED ? CONCLUSION_SUCCESS : CONCLUSION_FAILURE;
         CheckRunOutput output = buildOutput(verdict);
         long installationId = repository.getGithubInstallation().getInstallationId();
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        log.info("DIAGNOSTIC: requesting installation access token for installation {} (analysis run {}).",
+                installationId, analysisRun.getId());
         String installationAccessToken = gitHubAppAuthService.getInstallationAccessToken(installationId);
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        log.info("DIAGNOSTIC: obtained installation access token for analysis run {}.", analysisRun.getId());
         Instant now = clock.instant();
 
         if (analysisRun.getGithubCheckRunId() == null) {
@@ -118,8 +130,14 @@ public class GitHubCheckRunService {
             String installationAccessToken, Instant now) {
         CreateCheckRunRequest request = new CreateCheckRunRequest(
                 checkRunName, analysisRun.getCommitSha(), STATUS_COMPLETED, conclusion, now, now, output);
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        log.info("DIAGNOSTIC: calling gitHubApiClient.createCheckRun for repository '{}' (analysis run {}).",
+                repository.getFullName(), analysisRun.getId());
         CheckRunResponse response = gitHubApiClient.createCheckRun(
                 repository.getFullName(), request, installationAccessToken);
+        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
+        log.info("DIAGNOSTIC: gitHubApiClient.createCheckRun returned id {} (analysis run {}).",
+                response.id(), analysisRun.getId());
 
         analysisRun.setGithubCheckRunId(response.id());
         analysisRunRepository.save(analysisRun);

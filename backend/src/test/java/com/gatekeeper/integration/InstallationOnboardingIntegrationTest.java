@@ -50,6 +50,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -134,6 +136,9 @@ class InstallationOnboardingIntegrationTest {
     @Autowired
     private AnalysisRunRepository analysisRunRepository;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @Value("${gatekeeper.github.webhook.secret}")
     private String webhookSecret;
 
@@ -166,13 +171,22 @@ class InstallationOnboardingIntegrationTest {
         // InstallationRepositorySyncRequestedEvent -> GitHubRepositorySyncService ->
         // RepositoryService.synchronizeFromInstallation: the repository now exists
         // without ever having been manually seeded by this test.
-        Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+        //
+        // Read inside an explicit, short-lived transaction (rather than relying on
+        // repositoryRepository's own per-call transaction) so the Hibernate session
+        // is still open when the lazy githubInstallation association below is
+        // navigated - GitHubRepositorySyncService's listener is deliberately
+        // @TransactionalEventListener(phase = AFTER_COMMIT), so wrapping this whole
+        // test in @Transactional would prevent that commit - and therefore the sync
+        // itself - from ever happening.
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> transactionTemplate.executeWithoutResult(status -> {
             Repository repository = repositoryRepository.findByGithubRepositoryId(GITHUB_REPOSITORY_ID).orElseThrow();
             assertThat(repository.getFullName()).isEqualTo(REPOSITORY_FULL_NAME);
             assertThat(repository.getOwner()).isEqualTo("arcinth");
             assertThat(repository.isActive()).isTrue();
             assertThat(repository.getGithubInstallation().getInstallationId()).isEqualTo(INSTALLATION_ID);
-        });
+        }));
         wireMockServer.verify(1, getRequestedFor(urlPathEqualTo("/installation/repositories")));
 
         // Now a pull_request webhook for that same GitHub repository id must resolve

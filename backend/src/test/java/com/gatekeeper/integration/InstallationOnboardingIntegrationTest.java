@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.analysisrun.AnalysisRunRepository;
 import com.gatekeeper.analysisrun.AnalysisRunStatus;
 import com.gatekeeper.github.GitHubInstallationRepository;
@@ -28,6 +29,7 @@ import com.gatekeeper.pullrequest.PullRequest;
 import com.gatekeeper.pullrequest.PullRequestRepository;
 import com.gatekeeper.repository.Repository;
 import com.gatekeeper.repository.RepositoryRepository;
+import com.gatekeeper.verdict.VerdictRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -35,10 +37,12 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.AfterAll;
@@ -77,7 +81,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * runs -&gt; VerdictProducedEvent -&gt; GitHubCheckRunService publishes a
  * Check Run.
  */
-@Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc
 @Testcontainers
@@ -138,6 +141,9 @@ class InstallationOnboardingIntegrationTest {
 
     @Autowired
     private AnalysisRunRepository analysisRunRepository;
+
+    @Autowired
+    private VerdictRepository verdictRepository;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -209,9 +215,12 @@ class InstallationOnboardingIntegrationTest {
         // pull_request analysis: PullRequest persisted, AnalysisRun reaches COMPLETED,
         // and (VerdictProducedEvent having fired) a GitHub Check Run is published.
         // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
-        // On timeout, dump WireMock's own request log (independent of application
-        // logging) so it's clear whether the access-token and/or check-run calls were
-        // ever actually attempted, before rethrowing so the test still fails normally.
+        // Deliberately embedded in the *thrown* AssertionError's message, not just
+        // logged: application log.info/log.error output was added in an earlier
+        // iteration but isn't visible in the CI job's summary view, so evidence has
+        // to travel inside the failure JUnit/Surefire itself reports - the same
+        // channel that already surfaced the "ConditionTimeout" text being debugged.
+        TransactionTemplate diagnosticTransaction = new TransactionTemplate(transactionManager);
         try {
             Awaitility.await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
                 PullRequest pullRequest = pullRequestRepository.findByGithubPrId(githubPrId).orElseThrow();
@@ -221,19 +230,110 @@ class InstallationOnboardingIntegrationTest {
                 assertThat(run.getGithubCheckRunId()).isEqualTo(9988L);
             });
         } catch (ConditionTimeoutException ex) {
-            log.error("DIAGNOSTIC: timed out waiting for the check run. WireMock received {} request(s) total: {}",
-                    wireMockServer.getAllServeEvents().size(),
-                    wireMockServer.getAllServeEvents().stream()
-                            .map(event -> event.getRequest().getMethod() + " " + event.getRequest().getUrl())
-                            .toList());
-            log.error("DIAGNOSTIC: access-token POSTs received: {}; check-run POSTs received: {}",
-                    wireMockServer.findAll(postRequestedFor(
-                            urlPathEqualTo("/app/installations/" + INSTALLATION_ID + "/access_tokens"))).size(),
-                    wireMockServer.findAll(postRequestedFor(
-                            urlPathEqualTo("/repos/" + REPOSITORY_FULL_NAME + "/check-runs"))).size());
-            throw ex;
+            throw new AssertionError(diagnosticReport(githubPrId, diagnosticTransaction), ex);
         }
         wireMockServer.verify(1, postRequestedFor(urlPathEqualTo("/repos/" + REPOSITORY_FULL_NAME + "/check-runs")));
+    }
+
+    /**
+     * Best-effort: DB reads run inside their own real transaction (needed for the
+     * lazy githubInstallation association); if gathering diagnostics itself throws,
+     * that's recorded in the map rather than replacing the original
+     * ConditionTimeoutException that triggered this in the first place.
+     */
+    private String diagnosticReport(long githubPrId, TransactionTemplate transactionTemplate) {
+        Map<String, Object> facts = new LinkedHashMap<>();
+        transactionTemplate.executeWithoutResult(status -> {
+            Optional<PullRequest> pullRequest = pullRequestRepository.findByGithubPrId(githubPrId);
+            facts.put("pullRequestExists", pullRequest.isPresent());
+
+            Optional<AnalysisRun> run = pullRequest.flatMap(pr ->
+                    analysisRunRepository.findByPullRequestIdAndCommitSha(pr.getId(), "sha-onboarding"));
+            facts.put("analysisRunExists", run.isPresent());
+            facts.put("analysisRunStatus", run.map(AnalysisRun::getStatus).map(Object::toString).orElse(null));
+            facts.put("analysisRunCheckRunId", run.map(AnalysisRun::getGithubCheckRunId).orElse(null));
+            facts.put("analysisRunFailureReason", run.map(AnalysisRun::getFailureReason).orElse(null));
+
+            facts.put("verdictExists", run.map(r -> verdictRepository.findByAnalysisRunId(r.getId()).isPresent())
+                    .orElse(false));
+
+            Optional<Repository> repository = repositoryRepository.findByGithubRepositoryId(GITHUB_REPOSITORY_ID);
+            facts.put("repositoryExists", repository.isPresent());
+            facts.put("repositoryFullName", repository.map(Repository::getFullName).orElse(null));
+            facts.put("repositoryInstallationExists",
+                    repository.map(r -> r.getGithubInstallation() != null).orElse(false));
+            facts.put("installationId", repository
+                    .map(Repository::getGithubInstallation)
+                    .map(installation -> (Object) installation.getInstallationId())
+                    .orElse(null));
+        });
+
+        int repoListCalls = wireMockServer.findAll(
+                getRequestedFor(urlPathEqualTo("/installation/repositories"))).size();
+        int accessTokenCalls = wireMockServer.findAll(postRequestedFor(
+                urlPathEqualTo("/app/installations/" + INSTALLATION_ID + "/access_tokens"))).size();
+        int filesCalls = wireMockServer.findAll(
+                getRequestedFor(urlPathEqualTo("/repos/" + REPOSITORY_FULL_NAME + "/pulls/7/files"))).size();
+        int checkRunCalls = wireMockServer.findAll(postRequestedFor(
+                urlPathEqualTo("/repos/" + REPOSITORY_FULL_NAME + "/check-runs"))).size();
+        List<String> allRequests = wireMockServer.getAllServeEvents().stream()
+                .map(event -> event.getRequest().getMethod() + " " + event.getRequest().getUrl())
+                .toList();
+
+        StringBuilder report = new StringBuilder();
+        report.append("=== DATABASE ===\n\n");
+        report.append("PullRequest exists: ").append(facts.get("pullRequestExists")).append("\n\n");
+        report.append("AnalysisRun exists: ").append(facts.get("analysisRunExists")).append("\n\n");
+        report.append("AnalysisRun.status: ").append(facts.get("analysisRunStatus")).append('\n');
+        report.append("AnalysisRun.githubCheckRunId: ").append(facts.get("analysisRunCheckRunId")).append('\n');
+        report.append("AnalysisRun.failureReason: ").append(facts.get("analysisRunFailureReason")).append("\n\n");
+        report.append("Verdict exists: ").append(facts.get("verdictExists")).append("\n\n");
+        report.append("Repository exists: ").append(facts.get("repositoryExists")).append('\n');
+        report.append("Repository.fullName: ").append(facts.get("repositoryFullName")).append('\n');
+        report.append("Repository.githubInstallation exists: ")
+                .append(facts.get("repositoryInstallationExists")).append('\n');
+        report.append("InstallationId: ").append(facts.get("installationId")).append("\n\n");
+
+        report.append("=== WIREMOCK ===\n\n");
+        report.append("GET /installation/repositories : ").append(repoListCalls).append('\n');
+        report.append("POST /access_tokens : ").append(accessTokenCalls).append('\n');
+        report.append("GET /pulls/{n}/files : ").append(filesCalls).append('\n');
+        report.append("POST /check-runs : ").append(checkRunCalls).append("\n\n");
+        report.append("All requests:\n");
+        allRequests.forEach(request -> report.append(request).append('\n'));
+
+        report.append("\n=== CONCLUSION ===\n");
+        report.append("Last confirmed successful checkpoint: ").append(lastSuccessfulCheckpoint(facts, checkRunCalls));
+        return report.toString();
+    }
+
+    /**
+     * Walks the execution path in order and reports the last checkpoint that
+     * actually succeeded - the checkpoint immediately after it is, by construction,
+     * the first point where expected behavior diverged.
+     */
+    private String lastSuccessfulCheckpoint(Map<String, Object> facts, int checkRunCalls) {
+        record Checkpoint(String name, boolean success) {
+        }
+        List<Checkpoint> checkpoints = List.of(
+                new Checkpoint("PullRequest persisted", Boolean.TRUE.equals(facts.get("pullRequestExists"))),
+                new Checkpoint("AnalysisRun created", Boolean.TRUE.equals(facts.get("analysisRunExists"))),
+                new Checkpoint("AnalysisRun reached COMPLETED",
+                        "COMPLETED".equals(facts.get("analysisRunStatus"))),
+                new Checkpoint("Verdict persisted (VerdictProducedEvent published immediately after)",
+                        Boolean.TRUE.equals(facts.get("verdictExists"))),
+                new Checkpoint("GitHub check-run POST was received by WireMock", checkRunCalls > 0),
+                new Checkpoint("AnalysisRun.githubCheckRunId persisted",
+                        facts.get("analysisRunCheckRunId") != null));
+
+        String last = "none - PullRequest was never persisted";
+        for (Checkpoint checkpoint : checkpoints) {
+            if (!checkpoint.success()) {
+                break;
+            }
+            last = checkpoint.name();
+        }
+        return last;
     }
 
     private org.springframework.test.web.servlet.ResultActions performInstallationWebhook(String action, String deliveryId)

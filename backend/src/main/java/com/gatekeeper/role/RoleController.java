@@ -4,12 +4,14 @@ import com.gatekeeper.common.ApiResponse;
 import com.gatekeeper.role.dto.CreateRoleRequest;
 import com.gatekeeper.role.dto.RoleResponse;
 import com.gatekeeper.role.dto.UpdateRoleRequest;
+import com.gatekeeper.security.SecurityUser;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,18 +44,24 @@ public class RoleController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<RoleResponse> create(@Valid @RequestBody CreateRoleRequest request) {
-        return ApiResponse.ok("Role created successfully.", RoleResponse.from(roleService.create(request)));
+    public ApiResponse<RoleResponse> create(
+            @Valid @RequestBody CreateRoleRequest request, @AuthenticationPrincipal SecurityUser principal) {
+        return ApiResponse.ok("Role created successfully.",
+                RoleResponse.from(roleService.create(request, principal.getId())));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<RoleResponse> update(@PathVariable Long id, @Valid @RequestBody UpdateRoleRequest request) {
-        return ApiResponse.ok("Role updated successfully.", RoleResponse.from(roleService.update(id, request)));
+    public ApiResponse<RoleResponse> update(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateRoleRequest request,
+            @AuthenticationPrincipal SecurityUser principal) {
+        return ApiResponse.ok("Role updated successfully.",
+                RoleResponse.from(roleService.update(id, request, principal.getId())));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long id) {
-        roleService.delete(id);
+    public void delete(@PathVariable Long id, @AuthenticationPrincipal SecurityUser principal) {
+        roleService.delete(id, principal.getId());
     }
 }

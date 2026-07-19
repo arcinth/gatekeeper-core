@@ -83,7 +83,7 @@ class PolicyConfigurationControllerTest {
     @Test
     void update_returns200WhenTheCallerHasPolicyManage() throws Exception {
         authenticateAs("admin@example.com", 3L, "ADMINISTRATOR");
-        when(policyConfigurationService.upsert(eq(3L), eq("TODO_COMMENT"), any())).thenReturn(
+        when(policyConfigurationService.upsert(eq(3L), eq("TODO_COMMENT"), any(), any())).thenReturn(
                 new PolicyConfigurationResponse(
                         "TODO_COMMENT", "desc", PolicyCategory.MAINTAINABILITY, PolicySeverity.LOW,
                         false, PolicySeverity.LOW, true));
@@ -99,7 +99,7 @@ class PolicyConfigurationControllerTest {
     @Test
     void update_returns404WhenTheRuleIdIsUnrecognized() throws Exception {
         authenticateAs("admin@example.com", 3L, "ADMINISTRATOR");
-        when(policyConfigurationService.upsert(eq(3L), eq("NOT_A_REAL_RULE"), any()))
+        when(policyConfigurationService.upsert(eq(3L), eq("NOT_A_REAL_RULE"), any(), any()))
                 .thenThrow(new ResourceNotFoundException("No PolicyRule found with id: NOT_A_REAL_RULE"));
 
         mockMvc.perform(put("/api/v1/policies/NOT_A_REAL_RULE")
@@ -132,7 +132,7 @@ class PolicyConfigurationControllerTest {
     @Test
     void resetToDefault_returns200WhenTheCallerHasPolicyManage() throws Exception {
         authenticateAs("platform@example.com", 3L, "PLATFORM_ENGINEER");
-        when(policyConfigurationService.resetToDefault(3L, "TODO_COMMENT")).thenReturn(
+        when(policyConfigurationService.resetToDefault(eq(3L), eq("TODO_COMMENT"), any())).thenReturn(
                 new PolicyConfigurationResponse(
                         "TODO_COMMENT", "desc", PolicyCategory.MAINTAINABILITY, PolicySeverity.LOW,
                         true, PolicySeverity.LOW, false));

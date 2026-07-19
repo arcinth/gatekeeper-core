@@ -7,9 +7,10 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Exhaustively pins the role -> permission matrix approved across Milestone 5
- * (RBAC Enforcement) and Milestone 6 (Policy Management). If this test needs
- * to change, docs/Authorization-Model.md's matrix table must change with it -
- * they are two views of the same fact.
+ * (RBAC Enforcement), Milestone 6 (Policy Management), and Milestone 7
+ * (Enterprise Audit Logging). If this test needs to change,
+ * docs/Authorization-Model.md's matrix table must change with it - they are
+ * two views of the same fact.
  */
 class RolePermissionsTest {
 
@@ -21,7 +22,8 @@ class RolePermissionsTest {
                 Permission.REPOSITORY_MANAGE,
                 Permission.POLICY_MANAGE,
                 Permission.USER_MANAGE,
-                Permission.ROLE_MANAGE);
+                Permission.ROLE_MANAGE,
+                Permission.AUDIT_LOG_READ);
     }
 
     @Test
@@ -34,9 +36,9 @@ class RolePermissionsTest {
     }
 
     @Test
-    void devSecOpsEngineer_canReadAndReview_butNotManageAnything() {
+    void devSecOpsEngineer_canReadReviewAndAudit_butNotManageAnything() {
         assertThat(RolePermissions.forRole(RoleName.DEVSECOPS_ENGINEER)).containsExactlyInAnyOrder(
-                Permission.WORKSPACE_READ, Permission.REVIEW_DECISION_CREATE);
+                Permission.WORKSPACE_READ, Permission.REVIEW_DECISION_CREATE, Permission.AUDIT_LOG_READ);
     }
 
     @Test

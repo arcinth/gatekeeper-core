@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.organization.Organization;
 import com.gatekeeper.organization.OrganizationRepository;
@@ -26,13 +27,15 @@ import org.junit.jupiter.api.Test;
 class PolicyConfigurationServiceTest {
 
     private static final Long ORG_ID = 7L;
+    private static final Long ACTOR_ID = 42L;
 
     private final PolicyRule ruleA = testRule("RULE_A", PolicyCategory.CODE_QUALITY, PolicySeverity.LOW);
     private final PolicyRule ruleB = testRule("RULE_B", PolicyCategory.MAINTAINABILITY, PolicySeverity.MEDIUM);
     private final PolicyConfigurationRepository policyConfigurationRepository = mock(PolicyConfigurationRepository.class);
     private final OrganizationRepository organizationRepository = mock(OrganizationRepository.class);
-    private final PolicyConfigurationService service =
-            new PolicyConfigurationService(List.of(ruleA, ruleB), policyConfigurationRepository, organizationRepository);
+    private final AuditLogService auditLogService = mock(AuditLogService.class);
+    private final PolicyConfigurationService service = new PolicyConfigurationService(
+            List.of(ruleA, ruleB), policyConfigurationRepository, organizationRepository, auditLogService);
 
     @Test
     void buildConfigurationSet_withNoOverrides_behavesLikeEveryRuleAtItsDefault() {
@@ -89,7 +92,7 @@ class PolicyConfigurationServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         PolicyConfigurationResponse response = service.upsert(
-                ORG_ID, "RULE_A", new UpdatePolicyConfigurationRequest(false, PolicySeverity.HIGH));
+                ORG_ID, "RULE_A", new UpdatePolicyConfigurationRequest(false, PolicySeverity.HIGH), ACTOR_ID);
 
         assertThat(response.enabled()).isFalse();
         assertThat(response.severity()).isEqualTo(PolicySeverity.HIGH);
@@ -106,7 +109,7 @@ class PolicyConfigurationServiceTest {
         when(policyConfigurationRepository.save(any(PolicyConfiguration.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.upsert(ORG_ID, "RULE_A", new UpdatePolicyConfigurationRequest(true, null));
+        service.upsert(ORG_ID, "RULE_A", new UpdatePolicyConfigurationRequest(true, null), ACTOR_ID);
 
         assertThat(existing.isEnabled()).isTrue();
         assertThat(existing.getSeverityOverride()).isNull();
@@ -115,7 +118,8 @@ class PolicyConfigurationServiceTest {
 
     @Test
     void upsert_throwsResourceNotFoundForAnUnknownRuleId() {
-        assertThatThrownBy(() -> service.upsert(ORG_ID, "NOT_A_REAL_RULE", new UpdatePolicyConfigurationRequest(true, null)))
+        assertThatThrownBy(() -> service.upsert(
+                ORG_ID, "NOT_A_REAL_RULE", new UpdatePolicyConfigurationRequest(true, null), ACTOR_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(policyConfigurationRepository, never()).save(any());
@@ -125,7 +129,7 @@ class PolicyConfigurationServiceTest {
     void upsert_throwsResourceNotFoundForAnUnknownOrganization() {
         when(organizationRepository.findById(404L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.upsert(404L, "RULE_A", new UpdatePolicyConfigurationRequest(true, null)))
+        assertThatThrownBy(() -> service.upsert(404L, "RULE_A", new UpdatePolicyConfigurationRequest(true, null), ACTOR_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -134,7 +138,7 @@ class PolicyConfigurationServiceTest {
         PolicyConfiguration existing = PolicyConfiguration.builder().ruleId("RULE_A").enabled(false).build();
         when(policyConfigurationRepository.findByOrganizationIdAndRuleId(ORG_ID, "RULE_A")).thenReturn(Optional.of(existing));
 
-        PolicyConfigurationResponse response = service.resetToDefault(ORG_ID, "RULE_A");
+        PolicyConfigurationResponse response = service.resetToDefault(ORG_ID, "RULE_A", ACTOR_ID);
 
         verify(policyConfigurationRepository).delete(existing);
         assertThat(response.enabled()).isTrue();
@@ -145,7 +149,7 @@ class PolicyConfigurationServiceTest {
     void resetToDefault_isANoOpWhenNoOverrideExists() {
         when(policyConfigurationRepository.findByOrganizationIdAndRuleId(ORG_ID, "RULE_A")).thenReturn(Optional.empty());
 
-        PolicyConfigurationResponse response = service.resetToDefault(ORG_ID, "RULE_A");
+        PolicyConfigurationResponse response = service.resetToDefault(ORG_ID, "RULE_A", ACTOR_ID);
 
         verify(policyConfigurationRepository, never()).delete(any());
         assertThat(response.overridden()).isFalse();
@@ -153,7 +157,7 @@ class PolicyConfigurationServiceTest {
 
     @Test
     void resetToDefault_throwsResourceNotFoundForAnUnknownRuleId() {
-        assertThatThrownBy(() -> service.resetToDefault(ORG_ID, "NOT_A_REAL_RULE"))
+        assertThatThrownBy(() -> service.resetToDefault(ORG_ID, "NOT_A_REAL_RULE", ACTOR_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 

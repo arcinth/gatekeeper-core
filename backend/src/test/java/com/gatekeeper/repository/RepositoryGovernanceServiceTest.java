@@ -13,6 +13,7 @@ import com.gatekeeper.aireviewengine.AIReviewFindingType;
 import com.gatekeeper.aireviewfinding.AIReviewFindingRepository;
 import com.gatekeeper.analysisrun.AnalysisRunRepository;
 import com.gatekeeper.analysisrun.AnalysisRunStatus;
+import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.github.GitHubInstallationRepository;
 import com.gatekeeper.organization.OrganizationService;
@@ -40,8 +41,9 @@ class RepositoryGovernanceServiceTest {
     private final RepositoryRepository repositoryRepository = mock(RepositoryRepository.class);
     private final GitHubInstallationRepository gitHubInstallationRepository = mock(GitHubInstallationRepository.class);
     private final OrganizationService organizationService = mock(OrganizationService.class);
+    private final AuditLogService auditLogService = mock(AuditLogService.class);
     private final RepositoryService repositoryService =
-            new RepositoryService(repositoryRepository, gitHubInstallationRepository, organizationService);
+            new RepositoryService(repositoryRepository, gitHubInstallationRepository, organizationService, auditLogService);
     private final AnalysisRunRepository analysisRunRepository = mock(AnalysisRunRepository.class);
     private final PolicyFindingRepository policyFindingRepository = mock(PolicyFindingRepository.class);
     private final SecurityFindingRepository securityFindingRepository = mock(SecurityFindingRepository.class);

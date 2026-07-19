@@ -15,6 +15,7 @@ import { RepositoryGovernancePage } from '../pages/RepositoryGovernancePage'
 import { RepositoriesPage } from '../pages/RepositoriesPage'
 import { PolicyManagementPage } from '../pages/PolicyManagementPage'
 import { UsersPage } from '../pages/UsersPage'
+import { AuditLogPage } from '../pages/AuditLogPage'
 import { ProtectedRoute } from './ProtectedRoute'
 
 export function AppRoutes() {
@@ -146,6 +147,14 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <UsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/audit-log"
+        element={
+          <ProtectedRoute>
+            <AuditLogPage />
           </ProtectedRoute>
         }
       />

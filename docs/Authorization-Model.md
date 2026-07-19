@@ -62,6 +62,7 @@ A small, fixed set of capabilities — one per *distinct action* the platform ex
 | `POLICY_MANAGE` | Enable/disable a policy rule or override its severity for the organization (Milestone 6) |
 | `USER_MANAGE` | Create, update, or remove users |
 | `ROLE_MANAGE` | Create, update, or remove roles |
+| `AUDIT_LOG_READ` | View the organization's audit log - the authoritative history of governance actions (Milestone 7) |
 
 ---
 
@@ -69,15 +70,17 @@ A small, fixed set of capabilities — one per *distinct action* the platform ex
 
 The single source of truth for this table is `RolePermissions.java`; `RolePermissionsTest.java` pins it exhaustively. If they ever disagree, the code is authoritative and this table is stale and must be corrected.
 
-| Role | WORKSPACE_READ | REVIEW_DECISION_CREATE | REPOSITORY_MANAGE | POLICY_MANAGE | USER_MANAGE | ROLE_MANAGE |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| ADMINISTRATOR | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
-| PLATFORM_ENGINEER | ✔ | ✔ | ✔ | ✔ | | |
-| DEVSECOPS_ENGINEER | ✔ | ✔ | | | | |
-| TECHNICAL_LEAD | ✔ | ✔ | | | | |
-| ENGINEERING_MANAGER | ✔ | ✔ | | | | |
-| DEVELOPER | ✔ | | | | | |
-| *(any other role name)* | | | | | | |
+| Role | WORKSPACE_READ | REVIEW_DECISION_CREATE | REPOSITORY_MANAGE | POLICY_MANAGE | USER_MANAGE | ROLE_MANAGE | AUDIT_LOG_READ |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| ADMINISTRATOR | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| PLATFORM_ENGINEER | ✔ | ✔ | ✔ | ✔ | | | |
+| DEVSECOPS_ENGINEER | ✔ | ✔ | | | | | ✔ |
+| TECHNICAL_LEAD | ✔ | ✔ | | | | | |
+| ENGINEERING_MANAGER | ✔ | ✔ | | | | | |
+| DEVELOPER | ✔ | | | | | | |
+| *(any other role name)* | | | | | | | |
+
+**Why DEVSECOPS_ENGINEER has AUDIT_LOG_READ but PLATFORM_ENGINEER does not:** the audit log is a security/compliance surface (Milestone 7) - DevSecOps' role is defined around that concern, the same reasoning that already grants it REVIEW_DECISION_CREATE despite having no management permissions. ADMINISTRATOR has it as part of full platform control. This is a deliberately narrow initial grant, not a statement that no other role could reasonably need it - see "How to Add a Permission" below if that changes.
 
 **Notable design choice:** a plain `DEVELOPER` can see everything (transparency is core to the product's value) but cannot submit a review decision. This closes the gap identified in the Product Readiness Review — previously, any authenticated user of any role could approve or reject a Pull Request.
 
@@ -106,7 +109,7 @@ This matters specifically because `Role` is a manageable entity: an administrato
 
 ---
 
-# Known Limitations (as of Milestone 6)
+# Known Limitations (as of Milestone 7)
 
 - **Static, in-code mapping.** `RolePermissions` is a compile-time table, not data in the database. A custom role created via `RoleController` gets no permissions until a developer updates the mapping in code. A future "permission assignment" capability (letting administrators configure a custom role's permissions through the API/UI) would extend this model without changing how any controller is annotated — controllers only ever reference `Permission`, never the mapping's storage mechanism.
 - **Frontend is not permission-aware yet.** The UI does not hide actions a user cannot perform; a `DEVELOPER` still sees the "Submit Decision" form and receives a 403 from the backend on submit. This is deliberately out of scope for Milestone 5 and is expected to be addressed in a following, focused milestone.

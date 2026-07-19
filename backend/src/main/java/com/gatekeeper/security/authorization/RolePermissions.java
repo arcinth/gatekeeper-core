@@ -28,7 +28,8 @@ public final class RolePermissions {
                     Permission.REPOSITORY_MANAGE,
                     Permission.POLICY_MANAGE,
                     Permission.USER_MANAGE,
-                    Permission.ROLE_MANAGE),
+                    Permission.ROLE_MANAGE,
+                    Permission.AUDIT_LOG_READ),
             RoleName.PLATFORM_ENGINEER, Set.of(
                     Permission.WORKSPACE_READ,
                     Permission.REVIEW_DECISION_CREATE,
@@ -36,7 +37,8 @@ public final class RolePermissions {
                     Permission.POLICY_MANAGE),
             RoleName.DEVSECOPS_ENGINEER, Set.of(
                     Permission.WORKSPACE_READ,
-                    Permission.REVIEW_DECISION_CREATE),
+                    Permission.REVIEW_DECISION_CREATE,
+                    Permission.AUDIT_LOG_READ),
             RoleName.TECHNICAL_LEAD, Set.of(
                     Permission.WORKSPACE_READ,
                     Permission.REVIEW_DECISION_CREATE),

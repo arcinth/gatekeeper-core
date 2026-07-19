@@ -12,8 +12,8 @@ import com.gatekeeper.aireviewrun.AIReviewRunRepository;
 import com.gatekeeper.aireviewrun.AIReviewRunStatus;
 import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.analysisrun.AnalysisRunService;
-import com.gatekeeper.auditlog.AuditLog;
-import com.gatekeeper.auditlog.AuditLogRepository;
+import com.gatekeeper.auditlog.AuditEvent;
+import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.organization.Organization;
 import com.gatekeeper.pullrequest.PullRequest;
 import com.gatekeeper.report.AiReviewStatus;
@@ -37,11 +37,11 @@ class ReportPublicationServiceTest {
     private final VerdictRepository verdictRepository = mock(VerdictRepository.class);
     private final AIReviewRunRepository aiReviewRunRepository = mock(AIReviewRunRepository.class);
     private final EngineeringReportRepository engineeringReportRepository = mock(EngineeringReportRepository.class);
-    private final AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+    private final AuditLogService auditLogService = mock(AuditLogService.class);
 
     private ReportPublicationService service(boolean aiReviewEnabled) {
         return new ReportPublicationService(aiReviewEnabled, analysisRunService, verdictRepository,
-                aiReviewRunRepository, engineeringReportRepository, auditLogRepository);
+                aiReviewRunRepository, engineeringReportRepository, auditLogService);
     }
 
     private void stubSaveReturnsSavedEntityWithAnId() {
@@ -119,7 +119,7 @@ class ReportPublicationServiceTest {
         service(false).onVerdictProduced(ANALYSIS_RUN_ID);
 
         verify(engineeringReportRepository, never()).save(any());
-        verify(auditLogRepository, never()).save(any());
+        verify(auditLogService, never()).record(any());
         verify(analysisRunService, never()).findByIdOrThrow(any());
     }
 
@@ -186,7 +186,7 @@ class ReportPublicationServiceTest {
     // --- publication side effects / idempotency --------------------------------------------------
 
     @Test
-    void publish_writesAPairedAuditLogEntryInTheSamePublishCall() {
+    void publish_recordsAnAuditEventInTheSamePublishCall() {
         AnalysisRun analysisRun = analysisRunWithOrganization();
         when(analysisRunService.findByIdOrThrow(ANALYSIS_RUN_ID)).thenReturn(analysisRun);
         when(engineeringReportRepository.existsByAnalysisRunId(ANALYSIS_RUN_ID)).thenReturn(false);
@@ -194,10 +194,11 @@ class ReportPublicationServiceTest {
 
         service(false).onVerdictProduced(ANALYSIS_RUN_ID);
 
-        ArgumentCaptor<AuditLog> auditCaptor = ArgumentCaptor.forClass(AuditLog.class);
-        verify(auditLogRepository).save(auditCaptor.capture());
-        assertThat(auditCaptor.getValue().getAnalysisRun()).isSameAs(analysisRun);
-        assertThat(auditCaptor.getValue().getOrganization()).isSameAs(analysisRun.getPullRequest().getRepository().getOrganization());
+        ArgumentCaptor<AuditEvent> auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditLogService).record(auditCaptor.capture());
+        assertThat(auditCaptor.getValue().getAnalysisRunId()).isEqualTo(ANALYSIS_RUN_ID);
+        assertThat(auditCaptor.getValue().getOrganizationId())
+                .isEqualTo(analysisRun.getPullRequest().getRepository().getOrganization().getId());
     }
 
     @Test
@@ -213,13 +214,16 @@ class ReportPublicationServiceTest {
         // The other, concurrent trigger already won the race - this call must not
         // throw, and must not write a second (orphaned) audit entry for a report
         // this call never actually created.
-        verify(auditLogRepository, never()).save(any());
+        verify(auditLogService, never()).record(any());
     }
 
     private AnalysisRun analysisRunWithOrganization() {
         Organization organization = Organization.builder().name("acme").build();
+        ReflectionTestUtils.setField(organization, "id", 9L);
         Repository repository = Repository.builder().fullName("org/core").organization(organization).build();
+        ReflectionTestUtils.setField(repository, "id", 5L);
         PullRequest pullRequest = PullRequest.builder().repository(repository).number(7).build();
+        ReflectionTestUtils.setField(pullRequest, "id", 3L);
         AnalysisRun analysisRun = AnalysisRun.builder().pullRequest(pullRequest).build();
         ReflectionTestUtils.setField(analysisRun, "id", ANALYSIS_RUN_ID);
         return analysisRun;

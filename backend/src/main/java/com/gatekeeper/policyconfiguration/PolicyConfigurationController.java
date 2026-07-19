@@ -47,7 +47,7 @@ public class PolicyConfigurationController {
             @AuthenticationPrincipal SecurityUser principal) {
         return ApiResponse.ok(
                 "Policy configuration updated successfully.",
-                policyConfigurationService.upsert(principal.getOrganizationId(), ruleId, request));
+                policyConfigurationService.upsert(principal.getOrganizationId(), ruleId, request, principal.getId()));
     }
 
     @DeleteMapping("/{ruleId}")
@@ -56,6 +56,6 @@ public class PolicyConfigurationController {
             @PathVariable String ruleId, @AuthenticationPrincipal SecurityUser principal) {
         return ApiResponse.ok(
                 "Policy configuration reset to default.",
-                policyConfigurationService.resetToDefault(principal.getOrganizationId(), ruleId));
+                policyConfigurationService.resetToDefault(principal.getOrganizationId(), ruleId, principal.getId()));
     }
 }

@@ -1,6 +1,7 @@
 import type { AIReviewRunStatus } from '../../types/aiReviewRun'
 import type { AIReviewConfidence } from '../../types/aiReviewFinding'
 import type { AnalysisRunStatus, PullRequestStatus } from '../../types/analysisRun'
+import type { AuditEventType } from '../../types/auditLog'
 import type { PolicySeverity } from '../../types/policyFinding'
 import type { AiReviewStatus } from '../../types/report'
 import type { ReviewDecisionType } from '../../types/reviewDecision'
@@ -85,4 +86,26 @@ export const REVIEW_DECISION_TONES: Record<ReviewDecisionType, string> = {
 export const ACTIVE_STATE_TONES: Record<'active' | 'inactive', string> = {
   active: 'bg-emerald-100 text-emerald-800',
   inactive: 'bg-slate-100 text-slate-600',
+}
+
+// Grouped by the dimension the event concerns, not by CRUD verb: governance
+// outcomes (verdict/review decision) reuse the same emerald/red pairing as
+// VERDICT_OUTCOME_TONES/REVIEW_DECISION_TONES; management actions (policy/
+// repository/user/role) share a neutral indigo/slate/red family distinct
+// from that governance pairing, since enabling a policy isn't a governance
+// verdict.
+export const AUDIT_EVENT_TYPE_TONES: Record<AuditEventType, string> = {
+  ENGINEERING_REPORT_PUBLISHED: 'bg-indigo-100 text-indigo-800',
+  VERDICT_PRODUCED: 'bg-indigo-100 text-indigo-800',
+  REVIEW_DECISION_RECORDED: 'bg-indigo-100 text-indigo-800',
+  POLICY_CONFIGURATION_CHANGED: 'bg-amber-100 text-amber-800',
+  REPOSITORY_CONNECTED: 'bg-emerald-100 text-emerald-800',
+  REPOSITORY_UPDATED: 'bg-amber-100 text-amber-800',
+  REPOSITORY_REMOVED: 'bg-red-100 text-red-800',
+  USER_CREATED: 'bg-emerald-100 text-emerald-800',
+  USER_UPDATED: 'bg-amber-100 text-amber-800',
+  USER_REMOVED: 'bg-red-100 text-red-800',
+  ROLE_CREATED: 'bg-emerald-100 text-emerald-800',
+  ROLE_UPDATED: 'bg-amber-100 text-amber-800',
+  ROLE_REMOVED: 'bg-red-100 text-red-800',
 }

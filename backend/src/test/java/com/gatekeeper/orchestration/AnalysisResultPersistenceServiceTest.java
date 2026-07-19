@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 
 import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.analysisrun.AnalysisRunService;
+import com.gatekeeper.auditlog.AuditLogService;
+import com.gatekeeper.organization.Organization;
 import com.gatekeeper.policy.PolicyCategory;
 import com.gatekeeper.policy.PolicyFinding;
 import com.gatekeeper.policy.PolicyResult;
@@ -52,9 +54,10 @@ class AnalysisResultPersistenceServiceTest {
     private final VerdictRepository verdictRepository = mock(VerdictRepository.class);
     private final VerdictReasonRepository verdictReasonRepository = mock(VerdictReasonRepository.class);
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+    private final AuditLogService auditLogService = mock(AuditLogService.class);
     private final AnalysisResultPersistenceService service = new AnalysisResultPersistenceService(
             analysisRunService, policyFindingRepository, securityFindingRepository,
-            verdictEngine, verdictRepository, verdictReasonRepository, eventPublisher);
+            verdictEngine, verdictRepository, verdictReasonRepository, eventPublisher, auditLogService);
 
     @Test
     void persistCompletedResult_savesFindingsFromBothEnginesAndMarksTheRunCompleted() {
@@ -241,8 +244,12 @@ class AnalysisResultPersistenceServiceTest {
     }
 
     private AnalysisRun analysisRunWithRepository(String repositoryFullName) {
-        Repository repository = Repository.builder().fullName(repositoryFullName).build();
+        Organization organization = Organization.builder().build();
+        ReflectionTestUtils.setField(organization, "id", 9L);
+        Repository repository = Repository.builder().organization(organization).fullName(repositoryFullName).build();
+        ReflectionTestUtils.setField(repository, "id", 5L);
         PullRequest pullRequest = PullRequest.builder().repository(repository).number(7).build();
+        ReflectionTestUtils.setField(pullRequest, "id", 3L);
         AnalysisRun analysisRun = AnalysisRun.builder().pullRequest(pullRequest).build();
         ReflectionTestUtils.setField(analysisRun, "id", ANALYSIS_RUN_ID);
         return analysisRun;

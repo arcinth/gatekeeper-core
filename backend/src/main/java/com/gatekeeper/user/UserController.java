@@ -1,6 +1,7 @@
 package com.gatekeeper.user;
 
 import com.gatekeeper.common.ApiResponse;
+import com.gatekeeper.security.SecurityUser;
 import com.gatekeeper.user.dto.CreateUserRequest;
 import com.gatekeeper.user.dto.UpdateUserRequest;
 import com.gatekeeper.user.dto.UserResponse;
@@ -10,6 +11,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,18 +44,24 @@ public class UserController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
-        return ApiResponse.ok("User created successfully.", UserResponse.from(userService.create(request)));
+    public ApiResponse<UserResponse> create(
+            @Valid @RequestBody CreateUserRequest request, @AuthenticationPrincipal SecurityUser principal) {
+        return ApiResponse.ok("User created successfully.",
+                UserResponse.from(userService.create(request, principal.getId())));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<UserResponse> update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request) {
-        return ApiResponse.ok("User updated successfully.", UserResponse.from(userService.update(id, request)));
+    public ApiResponse<UserResponse> update(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateUserRequest request,
+            @AuthenticationPrincipal SecurityUser principal) {
+        return ApiResponse.ok("User updated successfully.",
+                UserResponse.from(userService.update(id, request, principal.getId())));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long id) {
-        userService.delete(id);
+    public void delete(@PathVariable Long id, @AuthenticationPrincipal SecurityUser principal) {
+        userService.delete(id, principal.getId());
     }
 }

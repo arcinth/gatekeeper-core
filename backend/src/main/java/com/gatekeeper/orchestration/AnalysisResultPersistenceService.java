@@ -2,6 +2,9 @@ package com.gatekeeper.orchestration;
 
 import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.analysisrun.AnalysisRunService;
+import com.gatekeeper.auditlog.AuditEvent;
+import com.gatekeeper.auditlog.AuditEventType;
+import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.policy.PolicyResult;
 import com.gatekeeper.policyfinding.PolicyFindingEntity;
 import com.gatekeeper.policyfinding.PolicyFindingMapper;
@@ -19,6 +22,7 @@ import com.gatekeeper.verdictengine.VerdictContext;
 import com.gatekeeper.verdictengine.VerdictEngine;
 import com.gatekeeper.verdictengine.VerdictResult;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -84,6 +88,7 @@ public class AnalysisResultPersistenceService {
     private final VerdictRepository verdictRepository;
     private final VerdictReasonRepository verdictReasonRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public void persistCompletedResult(Long analysisRunId, PolicyResult policyResult, SecurityResult securityResult) {
@@ -101,6 +106,16 @@ public class AnalysisResultPersistenceService {
 
         VerdictResult verdictResult = evaluateVerdict(analysisRun, policyResult, securityResult);
         persistVerdict(analysisRun, verdictResult);
+
+        auditLogService.record(AuditEvent.builder()
+                .eventType(AuditEventType.VERDICT_PRODUCED)
+                .organizationId(analysisRun.getPullRequest().getRepository().getOrganization().getId())
+                .repositoryId(analysisRun.getPullRequest().getRepository().getId())
+                .pullRequestId(analysisRun.getPullRequest().getId())
+                .analysisRunId(analysisRunId)
+                .newValue(Map.of("outcome", verdictResult.outcome().name()))
+                .summary("Verdict " + verdictResult.outcome() + " produced for analysis run " + analysisRunId + ".")
+                .build());
 
         analysisRunService.markCompleted(analysisRun);
 

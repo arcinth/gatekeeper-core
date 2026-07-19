@@ -10,10 +10,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gatekeeper.config.SecurityConfig;
+import com.gatekeeper.organization.Organization;
+import com.gatekeeper.role.Role;
 import com.gatekeeper.security.CustomUserDetailsService;
 import com.gatekeeper.security.JwtAccessDeniedHandler;
 import com.gatekeeper.security.JwtAuthenticationEntryPoint;
 import com.gatekeeper.security.JwtService;
+import com.gatekeeper.security.SecurityUser;
+import com.gatekeeper.user.User;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,14 +25,19 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Proves REPOSITORY_MANAGE gates repository writes (Milestone 5: RBAC
  * Enforcement) - business logic itself is covered by RepositoryServiceTest;
  * this class exists to prove the authorization layer, not to re-test create().
+ * <p>
+ * Authenticates as a real {@link SecurityUser} (not a plain Spring
+ * {@code User}) - RepositoryController's write methods now read
+ * {@code principal.getId()} to attribute the audit trail (Milestone 7), and
+ * a mismatched principal type resolves to null there, NPEing instead of
+ * exercising the authorization behavior this class actually tests.
  */
 @WebMvcTest(RepositoryController.class)
 @Import({SecurityConfig.class, JwtAuthenticationEntryPoint.class, JwtAccessDeniedHandler.class})
@@ -56,7 +65,7 @@ class RepositoryControllerTest {
 
     @Test
     void create_returns403WhenTheCallerIsADeveloper() throws Exception {
-        authenticateAs("developer@example.com", "ROLE_DEVELOPER", "WORKSPACE_READ");
+        authenticateAs("developer@example.com", "DEVELOPER");
 
         mockMvc.perform(post("/api/v1/repositories")
                         .header("Authorization", "Bearer test-token")
@@ -67,10 +76,10 @@ class RepositoryControllerTest {
 
     @Test
     void create_returns201WhenTheCallerHasRepositoryManage() throws Exception {
-        authenticateAs("platform@example.com", "ROLE_PLATFORM_ENGINEER", "WORKSPACE_READ", "REPOSITORY_MANAGE");
+        authenticateAs("platform@example.com", "PLATFORM_ENGINEER");
         Repository repository = Repository.builder()
                 .name("core").fullName("acme/core").active(true).build();
-        when(repositoryService.create(any())).thenReturn(repository);
+        when(repositoryService.create(any(), any())).thenReturn(repository);
 
         mockMvc.perform(post("/api/v1/repositories")
                         .header("Authorization", "Bearer test-token")
@@ -80,12 +89,24 @@ class RepositoryControllerTest {
                 .andExpect(jsonPath("$.data.name").value("core"));
     }
 
-    private void authenticateAs(String email, String... authorities) {
+    private void authenticateAs(String email, String roleName) {
         Claims claims = mock(Claims.class);
         when(claims.get(JwtService.CLAIM_TYPE, String.class)).thenReturn(JwtService.TOKEN_TYPE_ACCESS);
         when(claims.get(JwtService.CLAIM_EMAIL, String.class)).thenReturn(email);
         when(jwtService.parseClaims(anyString())).thenReturn(claims);
-        UserDetails userDetails = User.withUsername(email).password("x").authorities(authorities).build();
-        when(customUserDetailsService.loadUserByUsername(eq(email))).thenReturn(userDetails);
+
+        Organization organization = Organization.builder().name("Acme").build();
+        ReflectionTestUtils.setField(organization, "id", 1L);
+        User user = User.builder()
+                .email(email)
+                .passwordHash("x")
+                .fullName("Test User")
+                .organization(organization)
+                .role(Role.builder().name(roleName).build())
+                .enabled(true)
+                .build();
+        ReflectionTestUtils.setField(user, "id", 1L);
+        SecurityUser securityUser = new SecurityUser(user);
+        when(customUserDetailsService.loadUserByUsername(eq(email))).thenReturn(securityUser);
     }
 }

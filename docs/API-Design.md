@@ -263,6 +263,30 @@ A configuration change only affects *future* analysis runs; every already-persis
 
 ---
 
+## Audit Log API
+
+The authoritative, immutable history of governance actions across the platform (Milestone 7: Enterprise Audit Logging). Answers who performed an action, what changed, when, and in which repository/pull request/analysis run/organization.
+
+### Endpoints
+
+```
+GET /api/v1/audit-logs
+
+GET /api/v1/audit-logs/{id}
+
+GET /api/v1/audit-logs/export
+```
+
+No write endpoints of any kind - entries are created only by `AuditLogService.record`, called synchronously (same transaction as the action itself, not async/best-effort like GitHub check-run publishing) from every producer that generates a governance event: `ReportPublicationService`, `AnalysisResultPersistenceService` (Verdict), `ReviewDecisionService`, `PolicyConfigurationService`, `RepositoryService`, `UserService`, and `RoleService`. There is no update or delete endpoint, and none will ever be added - an audit record must never be edited once persisted.
+
+`GET /api/v1/audit-logs` is filterable by `eventType`, `repositoryId`, `pullRequestId`, `analysisRunId`, `actorId`, `occurredAfter`, `occurredBefore`, paginated, and defaults to sorting by `occurredAt` descending. Always implicitly scoped to the caller's own organization - there is no `organizationId` query parameter, so a caller can never see another organization's audit trail. `GET /api/v1/audit-logs/{id}` returns a single entry, 404ing if it doesn't exist or belongs to a different organization. `GET /api/v1/audit-logs/export` streams every entry matching the same filters as CSV (ignoring pagination), for offline/compliance review. All three require `AUDIT_LOG_READ` (see [Authorization-Model.md](./Authorization-Model.md)).
+
+**Structured data, not just free text.** Per this milestone's design direction, each entry's `summary` is a human-readable presentation field only - the durable record is structured: `eventType`, `actorId`/`actorName` (who; null for system-produced events like `VERDICT_PRODUCED`), `targetType`/`targetId` (what was acted on, populated only for `USER`/`ROLE`/`POLICY_RULE` events that have no dedicated scope column), and `oldValue`/`newValue` (JSON objects capturing what changed, null when an event has no natural before/after - e.g. a brand-new resource has no "old" state). `repositoryId`, `pullRequestId`, and `analysisRunId` are populated whenever the event is scoped to one, independent of `targetType`/`targetId`.
+
+**Correlation id.** Every entry carries a `correlationId` shared by every audit event produced while handling the same HTTP request (see `com.gatekeeper.config.CorrelationIdFilter`) - not surfaced in the UI yet, but present in the model and the API response for future request-tracing.
+
+---
+
 ## Dashboard API
 
 Provides aggregated metrics.

@@ -103,7 +103,7 @@ class AnalysisRunControllerTest {
         when(claims.get(JwtService.CLAIM_TYPE, String.class)).thenReturn(JwtService.TOKEN_TYPE_ACCESS);
         when(claims.get(JwtService.CLAIM_EMAIL, String.class)).thenReturn(email);
         when(jwtService.parseClaims(anyString())).thenReturn(claims);
-        UserDetails userDetails = User.withUsername(email).password("x").authorities("ROLE_DEVELOPER").build();
+        UserDetails userDetails = User.withUsername(email).password("x").authorities("ROLE_DEVELOPER", "WORKSPACE_READ").build();
         when(customUserDetailsService.loadUserByUsername(email)).thenReturn(userDetails);
     }
 }

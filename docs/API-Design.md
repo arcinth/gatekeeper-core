@@ -327,7 +327,7 @@ Authentication
 
 Authorization
 
-- Role-Based Access Control
+- Permission-based Role-Based Access Control (Milestone 5). Controllers authorize on a fixed set of permissions (e.g. `WORKSPACE_READ`, `REVIEW_DECISION_CREATE`) rather than role names directly - see [Authorization-Model.md](./Authorization-Model.md) for the full role/permission matrix, the deny-by-default rule for unrecognized roles, and how to extend the model.
 
 Supported Roles
 

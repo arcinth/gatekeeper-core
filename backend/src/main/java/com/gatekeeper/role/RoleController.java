@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/roles")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasAuthority('ROLE_ADMINISTRATOR')")
+@PreAuthorize("hasAuthority('ROLE_MANAGE')")
 public class RoleController {
 
     private final RoleService roleService;

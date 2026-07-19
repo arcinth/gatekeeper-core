@@ -18,9 +18,19 @@ import java.util.Map;
  * reached COMPLETED. verdictReasons is a lightweight inline projection (not
  * a second round-trip to GET /api/v1/verdicts/{id}) - a viewer of one
  * AnalysisRun's detail sees the full governance explanation immediately.
+ * <p>
+ * pullRequestId is added the same additive way, as a top-level sibling of the
+ * existing nested pullRequest reference rather than a new field on
+ * PullRequestReference itself - that record is also embedded in
+ * ReportDetailResponse and constructed directly (not just via .from()) in an
+ * existing test, and this codebase's established convention already favors a
+ * small duplicated field over widening a shared reference type. It exists so
+ * the frontend can link from a run's detail view to its Pull Request's own
+ * detail view (GET /api/v1/pull-requests/{id}).
  */
 public record AnalysisRunDetailResponse(
         Long id,
+        Long pullRequestId,
         RepositoryReference repository,
         PullRequestReference pullRequest,
         String commitSha,
@@ -42,6 +52,7 @@ public record AnalysisRunDetailResponse(
             List<VerdictReasonSummary> verdictReasons) {
         return new AnalysisRunDetailResponse(
                 run.getId(),
+                run.getPullRequest().getId(),
                 RepositoryReference.from(run.getPullRequest().getRepository()),
                 PullRequestReference.from(run.getPullRequest()),
                 run.getCommitSha(),

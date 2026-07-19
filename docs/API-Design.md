@@ -144,7 +144,7 @@ Responsibilities
 
 ## Pull Request API
 
-Provides Pull Request information.
+Provides Pull Request information - the reviewer's primary workspace (Milestone 1).
 
 ### Endpoints
 
@@ -152,9 +152,22 @@ Provides Pull Request information.
 GET /api/v1/pull-requests
 
 GET /api/v1/pull-requests/{id}
-
-GET /api/v1/pull-requests/{id}/analysis
 ```
+
+Read-only: Pull Requests are created and updated only by the `pull_request`
+webhook, never by a client of this API.
+
+`GET /api/v1/pull-requests` is filterable by `repositoryId` and `status`,
+paginated, and defaults to sorting by `updatedAt` descending. Each row is
+enriched with its most recently created AnalysisRun's status and verdict
+outcome (both null if no AnalysisRun exists yet), and with GitHub-facing
+metadata (`number`, `githubUrl`, `repositoryOwner`, `repositoryName`) so the
+frontend can link out to GitHub directly.
+
+`GET /api/v1/pull-requests/{id}` returns the same GitHub metadata plus the
+Pull Request's complete AnalysisRun history (newest first, each with its own
+verdict outcome) inline - there is no separate `/analysis` sub-resource, so a
+client gets the full picture in one request.
 
 ---
 

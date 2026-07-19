@@ -101,6 +101,12 @@ export function AnalysisRunDetailPage() {
       <h1 className="mb-4 text-xl font-semibold text-slate-900">
         {run.repository.fullName} #{run.pullRequest.number}
       </h1>
+      <Link
+        to={`/pull-requests/${run.pullRequestId}`}
+        className="mb-4 inline-block text-sm text-slate-500 hover:underline"
+      >
+        View Pull Request &rarr;
+      </Link>
 
       <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm md:grid-cols-4">
         <Field label="Status" value={run.status} />

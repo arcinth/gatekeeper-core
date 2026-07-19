@@ -39,6 +39,7 @@ export interface PullRequestReference {
 
 export interface AnalysisRunDetail {
   id: number
+  pullRequestId: number
   repository: RepositoryReference
   pullRequest: PullRequestReference
   commitSha: string

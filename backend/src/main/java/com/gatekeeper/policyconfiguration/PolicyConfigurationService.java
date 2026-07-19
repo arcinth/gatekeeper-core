@@ -1,5 +1,9 @@
 package com.gatekeeper.policyconfiguration;
 
+import com.gatekeeper.auditlog.AuditEvent;
+import com.gatekeeper.auditlog.AuditEventType;
+import com.gatekeeper.auditlog.AuditLogService;
+import com.gatekeeper.auditlog.AuditTargetType;
 import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.organization.Organization;
 import com.gatekeeper.organization.OrganizationRepository;
@@ -36,6 +40,7 @@ public class PolicyConfigurationService {
     private final List<PolicyRule> policyRules;
     private final PolicyConfigurationRepository policyConfigurationRepository;
     private final OrganizationRepository organizationRepository;
+    private final AuditLogService auditLogService;
 
     /** The immutable snapshot PolicyEngine.evaluate consumes - built fresh for every evaluation, never cached or shared. */
     public PolicyConfigurationSet buildConfigurationSet(Long organizationId) {
@@ -68,28 +73,70 @@ public class PolicyConfigurationService {
     }
 
     @Transactional
-    public PolicyConfigurationResponse upsert(Long organizationId, String ruleId, UpdatePolicyConfigurationRequest request) {
+    public PolicyConfigurationResponse upsert(
+            Long organizationId, String ruleId, UpdatePolicyConfigurationRequest request, Long actorId) {
         PolicyRule rule = findRuleOrThrow(ruleId);
         Organization organization = organizationRepository.findById(organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Organization not found with id: " + organizationId));
 
-        PolicyConfiguration configuration = policyConfigurationRepository
+        PolicyConfiguration existing = policyConfigurationRepository
                 .findByOrganizationIdAndRuleId(organizationId, ruleId)
-                .orElseGet(() -> PolicyConfiguration.builder().organization(organization).ruleId(ruleId).build());
+                .orElse(null);
+        boolean previousEnabled = existing == null ? true : existing.isEnabled();
+        PolicySeverity previousSeverityOverride = existing == null ? null : existing.getSeverityOverride();
+
+        PolicyConfiguration configuration = existing == null
+                ? PolicyConfiguration.builder().organization(organization).ruleId(ruleId).build()
+                : existing;
         configuration.setEnabled(request.enabled());
         configuration.setSeverityOverride(request.severityOverride());
         policyConfigurationRepository.save(configuration);
+
+        auditLogService.record(AuditEvent.builder()
+                .eventType(AuditEventType.POLICY_CONFIGURATION_CHANGED)
+                .organizationId(organizationId)
+                .actorId(actorId)
+                .targetType(AuditTargetType.POLICY_RULE)
+                .targetId(ruleId)
+                .oldValue(policyConfigurationValue(previousEnabled, previousSeverityOverride))
+                .newValue(policyConfigurationValue(request.enabled(), request.severityOverride()))
+                .summary("Policy rule '" + ruleId + "' configuration updated.")
+                .build());
 
         return PolicyConfigurationResponse.from(rule, configuration.isEnabled(), configuration.getSeverityOverride());
     }
 
     /** Idempotent: deletes the override row if one exists, otherwise does nothing - either way the rule ends up at its own default. */
     @Transactional
-    public PolicyConfigurationResponse resetToDefault(Long organizationId, String ruleId) {
+    public PolicyConfigurationResponse resetToDefault(Long organizationId, String ruleId, Long actorId) {
         PolicyRule rule = findRuleOrThrow(ruleId);
-        policyConfigurationRepository.findByOrganizationIdAndRuleId(organizationId, ruleId)
-                .ifPresent(policyConfigurationRepository::delete);
+        PolicyConfiguration existing = policyConfigurationRepository
+                .findByOrganizationIdAndRuleId(organizationId, ruleId)
+                .orElse(null);
+        if (existing != null) {
+            boolean previousEnabled = existing.isEnabled();
+            PolicySeverity previousSeverityOverride = existing.getSeverityOverride();
+            policyConfigurationRepository.delete(existing);
+
+            auditLogService.record(AuditEvent.builder()
+                    .eventType(AuditEventType.POLICY_CONFIGURATION_CHANGED)
+                    .organizationId(organizationId)
+                    .actorId(actorId)
+                    .targetType(AuditTargetType.POLICY_RULE)
+                    .targetId(ruleId)
+                    .oldValue(policyConfigurationValue(previousEnabled, previousSeverityOverride))
+                    .newValue(policyConfigurationValue(true, null))
+                    .summary("Policy rule '" + ruleId + "' reset to default configuration.")
+                    .build());
+        }
         return PolicyConfigurationResponse.defaultFor(rule);
+    }
+
+    private Map<String, Object> policyConfigurationValue(boolean enabled, PolicySeverity severityOverride) {
+        Map<String, Object> value = new HashMap<>();
+        value.put("enabled", enabled);
+        value.put("severityOverride", severityOverride == null ? null : severityOverride.name());
+        return value;
     }
 
     private PolicyRule findRuleOrThrow(String ruleId) {

@@ -1,5 +1,8 @@
 package com.gatekeeper.repository;
 
+import com.gatekeeper.auditlog.AuditEvent;
+import com.gatekeeper.auditlog.AuditEventType;
+import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.exception.ConflictException;
 import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.github.GitHubInstallation;
@@ -11,6 +14,7 @@ import com.gatekeeper.organization.OrganizationService;
 import com.gatekeeper.repository.dto.CreateRepositoryRequest;
 import com.gatekeeper.repository.dto.UpdateRepositoryRequest;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +29,7 @@ public class RepositoryService {
     private final RepositoryRepository repositoryRepository;
     private final GitHubInstallationRepository gitHubInstallationRepository;
     private final OrganizationService organizationService;
+    private final AuditLogService auditLogService;
 
     public List<Repository> findAll() {
         return repositoryRepository.findAll();
@@ -36,7 +41,7 @@ public class RepositoryService {
     }
 
     @Transactional
-    public Repository create(CreateRepositoryRequest request) {
+    public Repository create(CreateRepositoryRequest request, Long actorId) {
         if (repositoryRepository.existsByFullNameIgnoreCase(request.fullName())) {
             throw new ConflictException("A repository named '" + request.fullName() + "' already exists.");
         }
@@ -47,22 +52,63 @@ public class RepositoryService {
                 .description(request.description())
                 .active(true)
                 .build();
-        return repositoryRepository.save(repository);
+        Repository saved = repositoryRepository.save(repository);
+
+        auditLogService.record(AuditEvent.builder()
+                .eventType(AuditEventType.REPOSITORY_CONNECTED)
+                .organizationId(saved.getOrganization().getId())
+                .repositoryId(saved.getId())
+                .actorId(actorId)
+                .newValue(Map.of("name", saved.getName(), "fullName", saved.getFullName(), "active", true))
+                .summary("Repository '" + saved.getFullName() + "' connected.")
+                .build());
+
+        return saved;
     }
 
     @Transactional
-    public Repository update(Long id, UpdateRepositoryRequest request) {
+    public Repository update(Long id, UpdateRepositoryRequest request, Long actorId) {
         Repository repository = findById(id);
+        Map<String, Object> oldValue = Map.of(
+                "name", repository.getName(),
+                "description", repository.getDescription() == null ? "" : repository.getDescription(),
+                "active", repository.isActive());
+
         repository.setName(request.name());
         repository.setDescription(request.description());
         repository.setActive(request.active());
-        return repositoryRepository.save(repository);
+        Repository saved = repositoryRepository.save(repository);
+
+        auditLogService.record(AuditEvent.builder()
+                .eventType(AuditEventType.REPOSITORY_UPDATED)
+                .organizationId(saved.getOrganization().getId())
+                .repositoryId(saved.getId())
+                .actorId(actorId)
+                .oldValue(oldValue)
+                .newValue(Map.of(
+                        "name", saved.getName(),
+                        "description", saved.getDescription() == null ? "" : saved.getDescription(),
+                        "active", saved.isActive()))
+                .summary("Repository '" + saved.getFullName() + "' updated.")
+                .build());
+
+        return saved;
     }
 
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, Long actorId) {
         Repository repository = findById(id);
+        Long organizationId = repository.getOrganization().getId();
+        String fullName = repository.getFullName();
         repositoryRepository.delete(repository);
+
+        auditLogService.record(AuditEvent.builder()
+                .eventType(AuditEventType.REPOSITORY_REMOVED)
+                .organizationId(organizationId)
+                .actorId(actorId)
+                .oldValue(Map.of("name", fullName))
+                .summary("Repository '" + fullName + "' removed.")
+                .build());
     }
 
     /**

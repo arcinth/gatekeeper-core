@@ -29,4 +29,7 @@ public enum Permission {
 
     /** Create, update, or remove roles. */
     ROLE_MANAGE,
+
+    /** View the organization's audit log (Milestone 7). */
+    AUDIT_LOG_READ,
 }

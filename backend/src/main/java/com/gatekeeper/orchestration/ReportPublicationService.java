@@ -4,9 +4,9 @@ import com.gatekeeper.aireviewrun.AIReviewRunRepository;
 import com.gatekeeper.aireviewrun.AIReviewRunStatus;
 import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.analysisrun.AnalysisRunService;
+import com.gatekeeper.auditlog.AuditEvent;
 import com.gatekeeper.auditlog.AuditEventType;
-import com.gatekeeper.auditlog.AuditLog;
-import com.gatekeeper.auditlog.AuditLogRepository;
+import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.organization.Organization;
 import com.gatekeeper.report.AiReviewStatus;
 import com.gatekeeper.report.EngineeringReport;
@@ -64,7 +64,7 @@ public class ReportPublicationService {
     private final VerdictRepository verdictRepository;
     private final AIReviewRunRepository aiReviewRunRepository;
     private final EngineeringReportRepository engineeringReportRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final AuditLogService auditLogService;
 
     public ReportPublicationService(
             @Value("${gatekeeper.ai-review.enabled}") boolean aiReviewEnabled,
@@ -72,13 +72,13 @@ public class ReportPublicationService {
             VerdictRepository verdictRepository,
             AIReviewRunRepository aiReviewRunRepository,
             EngineeringReportRepository engineeringReportRepository,
-            AuditLogRepository auditLogRepository) {
+            AuditLogService auditLogService) {
         this.aiReviewEnabled = aiReviewEnabled;
         this.analysisRunService = analysisRunService;
         this.verdictRepository = verdictRepository;
         this.aiReviewRunRepository = aiReviewRunRepository;
         this.engineeringReportRepository = engineeringReportRepository;
-        this.auditLogRepository = auditLogRepository;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -125,10 +125,12 @@ public class ReportPublicationService {
             AnalysisRun analysisRun = analysisRunService.findByIdOrThrow(analysisRunId);
             EngineeringReport report = engineeringReportRepository.save(
                     EngineeringReportMapper.toEntity(analysisRun, aiReviewStatus));
-            auditLogRepository.save(AuditLog.builder()
-                    .organization(organizationOf(analysisRun))
-                    .analysisRun(analysisRun)
+            auditLogService.record(AuditEvent.builder()
                     .eventType(AuditEventType.ENGINEERING_REPORT_PUBLISHED)
+                    .organizationId(organizationOf(analysisRun).getId())
+                    .analysisRunId(analysisRunId)
+                    .repositoryId(analysisRun.getPullRequest().getRepository().getId())
+                    .pullRequestId(analysisRun.getPullRequest().getId())
                     .summary("Engineering report published for analysis run " + analysisRunId + ".")
                     .build());
             log.info("Published engineering report {} for analysis run {} (aiReviewStatus={}).",

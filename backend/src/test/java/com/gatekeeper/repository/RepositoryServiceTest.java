@@ -13,6 +13,7 @@ import com.gatekeeper.github.dto.InstallationRepositoriesResponse.RepositorySumm
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload.InstallationReference;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload.RepositoryReference;
+import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.organization.Organization;
 import com.gatekeeper.organization.OrganizationService;
 import java.util.List;
@@ -38,8 +39,9 @@ class RepositoryServiceTest {
     private final Organization organization = Organization.builder().name("Default Organization").build();
     private final GitHubInstallation installation =
             GitHubInstallation.builder().organization(organization).installationId(INSTALLATION_ID).build();
+    private final AuditLogService auditLogService = mock(AuditLogService.class);
     private final RepositoryService service =
-            new RepositoryService(repositoryRepository, gitHubInstallationRepository, organizationService);
+            new RepositoryService(repositoryRepository, gitHubInstallationRepository, organizationService, auditLogService);
 
     @BeforeEach
     void setUp() {

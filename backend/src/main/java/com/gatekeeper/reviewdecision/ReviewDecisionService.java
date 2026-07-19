@@ -2,12 +2,16 @@ package com.gatekeeper.reviewdecision;
 
 import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.analysisrun.AnalysisRunRepository;
+import com.gatekeeper.auditlog.AuditEvent;
+import com.gatekeeper.auditlog.AuditEventType;
+import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.reviewdecision.dto.CreateReviewDecisionRequest;
 import com.gatekeeper.reviewdecision.dto.ReviewDecisionResponse;
 import com.gatekeeper.user.User;
 import com.gatekeeper.user.UserRepository;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -41,6 +45,7 @@ public class ReviewDecisionService {
     private final AnalysisRunRepository analysisRunRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public ReviewDecisionResponse create(Long analysisRunId, Long reviewerId, CreateReviewDecisionRequest request) {
@@ -54,6 +59,20 @@ public class ReviewDecisionService {
                 .reviewer(reviewer)
                 .decision(request.decision())
                 .comment(request.comment())
+                .build());
+
+        auditLogService.record(AuditEvent.builder()
+                .eventType(AuditEventType.REVIEW_DECISION_RECORDED)
+                .organizationId(analysisRun.getPullRequest().getRepository().getOrganization().getId())
+                .repositoryId(analysisRun.getPullRequest().getRepository().getId())
+                .pullRequestId(analysisRun.getPullRequest().getId())
+                .analysisRunId(analysisRunId)
+                .actorId(reviewerId)
+                .newValue(Map.of(
+                        "decision", request.decision().name(),
+                        "comment", request.comment() == null ? "" : request.comment()))
+                .summary(reviewer.getFullName() + " recorded a " + request.decision() + " decision for analysis run "
+                        + analysisRunId + ".")
                 .build());
 
         eventPublisher.publishEvent(new ReviewDecisionRecordedEvent(analysisRunId));

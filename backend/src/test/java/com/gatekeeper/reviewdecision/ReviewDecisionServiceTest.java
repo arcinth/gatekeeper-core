@@ -10,7 +10,12 @@ import static org.mockito.Mockito.when;
 
 import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.analysisrun.AnalysisRunRepository;
+import com.gatekeeper.auditlog.AuditEvent;
+import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.exception.ResourceNotFoundException;
+import com.gatekeeper.organization.Organization;
+import com.gatekeeper.pullrequest.PullRequest;
+import com.gatekeeper.repository.Repository;
 import com.gatekeeper.reviewdecision.dto.CreateReviewDecisionRequest;
 import com.gatekeeper.reviewdecision.dto.ReviewDecisionResponse;
 import com.gatekeeper.user.User;
@@ -29,14 +34,21 @@ class ReviewDecisionServiceTest {
     private final AnalysisRunRepository analysisRunRepository = mock(AnalysisRunRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
-    private final ReviewDecisionService service =
-            new ReviewDecisionService(reviewDecisionRepository, analysisRunRepository, userRepository, eventPublisher);
+    private final AuditLogService auditLogService = mock(AuditLogService.class);
+    private final ReviewDecisionService service = new ReviewDecisionService(
+            reviewDecisionRepository, analysisRunRepository, userRepository, eventPublisher, auditLogService);
 
-    private final AnalysisRun analysisRun = AnalysisRun.builder().build();
+    private final Organization organization = Organization.builder().name("Acme").build();
+    private final Repository repository = Repository.builder().organization(organization).fullName("acme/core").build();
+    private final PullRequest pullRequest = PullRequest.builder().repository(repository).number(7).build();
+    private final AnalysisRun analysisRun = AnalysisRun.builder().pullRequest(pullRequest).build();
     private final User reviewer = User.builder().fullName("Ada Reviewer").email("ada@example.com").build();
 
     @BeforeEach
     void assignReviewerId() {
+        ReflectionTestUtils.setField(organization, "id", 4L);
+        ReflectionTestUtils.setField(repository, "id", 5L);
+        ReflectionTestUtils.setField(pullRequest, "id", 6L);
         ReflectionTestUtils.setField(reviewer, "id", 9L);
     }
 
@@ -60,6 +72,12 @@ class ReviewDecisionServiceTest {
         assertThat(result.reviewerId()).isEqualTo(9L);
         assertThat(result.reviewerName()).isEqualTo("Ada Reviewer");
         verify(eventPublisher).publishEvent(new ReviewDecisionRecordedEvent(1L));
+
+        org.mockito.ArgumentCaptor<AuditEvent> auditCaptor = org.mockito.ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditLogService).record(auditCaptor.capture());
+        assertThat(auditCaptor.getValue().getActorId()).isEqualTo(9L);
+        assertThat(auditCaptor.getValue().getOrganizationId()).isEqualTo(4L);
+        assertThat(auditCaptor.getValue().getAnalysisRunId()).isEqualTo(1L);
     }
 
     @Test

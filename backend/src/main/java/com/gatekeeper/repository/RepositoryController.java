@@ -4,12 +4,14 @@ import com.gatekeeper.common.ApiResponse;
 import com.gatekeeper.repository.dto.CreateRepositoryRequest;
 import com.gatekeeper.repository.dto.RepositoryResponse;
 import com.gatekeeper.repository.dto.UpdateRepositoryRequest;
+import com.gatekeeper.security.SecurityUser;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -45,20 +47,26 @@ public class RepositoryController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('REPOSITORY_MANAGE')")
-    public ApiResponse<RepositoryResponse> create(@Valid @RequestBody CreateRepositoryRequest request) {
-        return ApiResponse.ok("Repository created successfully.", RepositoryResponse.from(repositoryService.create(request)));
+    public ApiResponse<RepositoryResponse> create(
+            @Valid @RequestBody CreateRepositoryRequest request, @AuthenticationPrincipal SecurityUser principal) {
+        return ApiResponse.ok("Repository created successfully.",
+                RepositoryResponse.from(repositoryService.create(request, principal.getId())));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('REPOSITORY_MANAGE')")
-    public ApiResponse<RepositoryResponse> update(@PathVariable Long id, @Valid @RequestBody UpdateRepositoryRequest request) {
-        return ApiResponse.ok("Repository updated successfully.", RepositoryResponse.from(repositoryService.update(id, request)));
+    public ApiResponse<RepositoryResponse> update(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateRepositoryRequest request,
+            @AuthenticationPrincipal SecurityUser principal) {
+        return ApiResponse.ok("Repository updated successfully.",
+                RepositoryResponse.from(repositoryService.update(id, request, principal.getId())));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAuthority('REPOSITORY_MANAGE')")
-    public void delete(@PathVariable Long id) {
-        repositoryService.delete(id);
+    public void delete(@PathVariable Long id, @AuthenticationPrincipal SecurityUser principal) {
+        repositoryService.delete(id, principal.getId());
     }
 }

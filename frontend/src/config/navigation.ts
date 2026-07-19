@@ -4,6 +4,7 @@ import {
   FolderGit2,
   Gavel,
   GitPullRequest,
+  History,
   LayoutDashboard,
   ListChecks,
   ShieldAlert,
@@ -55,6 +56,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: 'Repositories', path: '/repositories', icon: FolderGit2 },
       { label: 'Policies', path: '/policies', icon: ListChecks },
       { label: 'Users', path: '/users', icon: Users },
+      { label: 'Audit Log', path: '/audit-log', icon: History },
     ],
   },
 ]

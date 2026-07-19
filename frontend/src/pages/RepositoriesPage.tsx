@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { LoadingSpinner } from '../components/LoadingSpinner'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { ErrorState } from '../components/ui/ErrorState'
+import { EmptyTableRow, Table, TableBody, TableHead } from '../components/ui/Table'
+import { ACTIVE_STATE_TONES } from '../components/ui/badgeTones'
 import { repositoryService } from '../services/repositoryService'
 import type { Repository } from '../types/repository'
-
-const ACTIVE_STYLES: Record<'active' | 'inactive', string> = {
-  active: 'bg-emerald-100 text-emerald-800',
-  inactive: 'bg-slate-100 text-slate-600',
-}
 
 export function RepositoriesPage() {
   const [repositories, setRepositories] = useState<Repository[]>([])
@@ -50,71 +50,60 @@ export function RepositoriesPage() {
   }
 
   return (
-    <AppLayout>
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">Repositories</h1>
-
-      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+    <AppLayout title="Repositories">
+      {error && <ErrorState message={error} />}
 
       {isLoading ? (
         <LoadingSpinner />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-2">Repository</th>
-                <th className="px-4 py-2">Description</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Connected</th>
-                <th className="px-4 py-2">Governance</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {repositories.length ? (
-                repositories.map((repository) => (
-                  <tr key={repository.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-2 font-medium text-slate-900">{repository.fullName}</td>
-                    <td className="px-4 py-2 text-slate-500">{repository.description ?? '—'}</td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          repository.active ? ACTIVE_STYLES.active : ACTIVE_STYLES.inactive
-                        }`}
-                      >
-                        {repository.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-slate-500">{new Date(repository.createdAt).toLocaleString()}</td>
-                    <td className="px-4 py-2">
-                      <Link
-                        to={`/repositories/${repository.id}/governance`}
-                        className="text-xs font-medium text-slate-700 hover:underline"
-                      >
-                        View Governance &rarr;
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <button
-                        onClick={() => void handleRemove(repository)}
-                        disabled={removingId === repository.id}
-                        className="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        {removingId === repository.id ? 'Removing...' : 'Remove'}
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
-                    No repositories connected.
+        <Table>
+          <TableHead>
+            <tr>
+              <th className="px-4 py-2">Repository</th>
+              <th className="px-4 py-2">Description</th>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2">Connected</th>
+              <th className="px-4 py-2">Governance</th>
+              <th className="px-4 py-2"></th>
+            </tr>
+          </TableHead>
+          <TableBody>
+            {repositories.length ? (
+              repositories.map((repository) => (
+                <tr key={repository.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-2 font-medium text-slate-900">{repository.fullName}</td>
+                  <td className="px-4 py-2 text-slate-500">{repository.description ?? '—'}</td>
+                  <td className="px-4 py-2">
+                    <Badge tone={repository.active ? ACTIVE_STATE_TONES.active : ACTIVE_STATE_TONES.inactive}>
+                      {repository.active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-2 text-slate-500">{new Date(repository.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-2">
+                    <Link
+                      to={`/repositories/${repository.id}/governance`}
+                      className="text-xs font-medium text-slate-700 hover:underline"
+                    >
+                      View Governance &rarr;
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => void handleRemove(repository)}
+                      disabled={removingId === repository.id}
+                    >
+                      {removingId === repository.id ? 'Removing...' : 'Remove'}
+                    </Button>
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              ))
+            ) : (
+              <EmptyTableRow colSpan={6}>No repositories connected.</EmptyTableRow>
+            )}
+          </TableBody>
+        </Table>
       )}
     </AppLayout>
   )

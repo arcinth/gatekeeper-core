@@ -2,32 +2,20 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { LoadingSpinner } from '../components/LoadingSpinner'
+import { Badge } from '../components/ui/Badge'
+import { EmptyState } from '../components/ui/EmptyState'
+import { EmptyTableRow, Table, TableBody, TableHead } from '../components/ui/Table'
+import { ANALYSIS_RUN_STATUS_TONES, VERDICT_OUTCOME_TONES } from '../components/ui/badgeTones'
 import { repositoryService } from '../services/repositoryService'
 import { repositoryGovernanceService } from '../services/repositoryGovernanceService'
 import { analysisRunService } from '../services/analysisRunService'
 import { verdictService } from '../services/verdictService'
 import type { Repository } from '../types/repository'
 import type { RepositoryGovernance } from '../types/repositoryGovernance'
-import type { AnalysisRunStatus, AnalysisRunSummary } from '../types/analysisRun'
-import type { VerdictOutcome, VerdictSummary } from '../types/verdict'
+import type { AnalysisRunSummary } from '../types/analysisRun'
+import type { VerdictSummary } from '../types/verdict'
 
 const RECENT_SIZE = 5
-
-const STATUS_STYLES: Record<AnalysisRunStatus, string> = {
-  RECEIVED: 'bg-slate-100 text-slate-700',
-  QUEUED: 'bg-slate-100 text-slate-700',
-  IN_PROGRESS: 'bg-amber-100 text-amber-800',
-  COMPLETED: 'bg-emerald-100 text-emerald-800',
-  FAILED: 'bg-red-100 text-red-800',
-}
-
-// Same emerald/red governance pairing used everywhere else a Verdict outcome
-// is shown (VerdictsPage, AnalysisRunsPage, AnalysisRunDetailPage) - the
-// established colors, not a page-local variant.
-const OUTCOME_STYLES: Record<VerdictOutcome, string> = {
-  APPROVED: 'bg-emerald-100 text-emerald-800',
-  BLOCKED: 'bg-red-100 text-red-800',
-}
 
 export function RepositoryGovernancePage() {
   const { id } = useParams<{ id?: string }>()
@@ -64,14 +52,15 @@ export function RepositoryGovernancePage() {
   }, [id])
 
   return (
-    <AppLayout>
-      <div className="mb-4 flex items-center gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">Repository Governance</h1>
-        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white">
+    <AppLayout
+      title="Repository Governance"
+      eyebrow={
+        <Badge tone="bg-slate-800 text-white" uppercase>
           Per-Repository
-        </span>
-      </div>
-
+        </Badge>
+      }
+      breadcrumbs={[{ label: 'Repositories', to: '/repositories' }, { label: 'Governance' }]}
+    >
       <div className="mb-6 flex items-center gap-3">
         <select
           className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
@@ -91,7 +80,7 @@ export function RepositoryGovernancePage() {
         </select>
       </div>
 
-      {!id && <p className="text-sm text-slate-500">Select a repository to view its governance activity.</p>}
+      {!id && <EmptyState title="Select a repository to view its governance activity." />}
 
       {id && isLoading && <LoadingSpinner />}
 
@@ -101,9 +90,9 @@ export function RepositoryGovernancePage() {
 
           <div className="mb-3 flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-900">Governance</h2>
-            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white">
+            <Badge tone="bg-slate-800 text-white" uppercase>
               Verdicts
-            </span>
+            </Badge>
           </div>
           <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
             <StatCard label={`Verdicts (${governance.windowDays}d)`} value={governance.totalVerdicts} />
@@ -151,9 +140,9 @@ export function RepositoryGovernancePage() {
           */}
           <div className="mb-3 mt-8 flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-900">AI Review</h2>
-            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700">
+            <Badge tone="bg-violet-100 text-violet-700" uppercase>
               Advisory &middot; AI Generated
-            </span>
+            </Badge>
           </div>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <StatCard label={`AI Findings (${governance.windowDays}d)`} value={governance.totalAiReviewFindings} tone="ai" />
@@ -205,118 +194,99 @@ function HealthSummary({ governance }: { governance: RepositoryGovernance }) {
 
 function RecentRunsTable({ runs }: { runs: AnalysisRunSummary[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-          <tr>
-            <th className="px-4 py-2">Pull Request</th>
-            <th className="px-4 py-2">Status</th>
-            <th className="px-4 py-2">Verdict</th>
-            <th className="px-4 py-2">Created</th>
-            <th className="px-4 py-2">Report</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {runs.length ? (
-            runs.map((run) => (
-              <tr key={run.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2">
-                  <Link to={`/analysis-runs/${run.id}`} className="text-slate-900 hover:underline">
-                    #{run.pullRequestNumber} {run.pullRequestTitle}
-                  </Link>
-                </td>
-                <td className="px-4 py-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[run.status]}`}>
-                    {run.status}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  {run.verdictOutcome ? (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${OUTCOME_STYLES[run.verdictOutcome]}`}>
-                      {run.verdictOutcome}
-                    </span>
-                  ) : (
-                    <span className="text-slate-400">&mdash;</span>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-slate-500">{new Date(run.createdAt).toLocaleString()}</td>
-                <td className="px-4 py-2">
-                  <Link to={`/analysis-runs/${run.id}`} className="text-xs font-medium text-indigo-700 hover:underline">
-                    View Report &rarr;
-                  </Link>
-                </td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
-                No analysis runs for this repository yet.
+    <Table>
+      <TableHead>
+        <tr>
+          <th className="px-4 py-2">Pull Request</th>
+          <th className="px-4 py-2">Status</th>
+          <th className="px-4 py-2">Verdict</th>
+          <th className="px-4 py-2">Created</th>
+          <th className="px-4 py-2">Report</th>
+        </tr>
+      </TableHead>
+      <TableBody>
+        {runs.length ? (
+          runs.map((run) => (
+            <tr key={run.id} className="hover:bg-slate-50">
+              <td className="px-4 py-2">
+                <Link to={`/analysis-runs/${run.id}`} className="text-slate-900 hover:underline">
+                  #{run.pullRequestNumber} {run.pullRequestTitle}
+                </Link>
+              </td>
+              <td className="px-4 py-2">
+                <Badge tone={ANALYSIS_RUN_STATUS_TONES[run.status]}>{run.status}</Badge>
+              </td>
+              <td className="px-4 py-2">
+                {run.verdictOutcome ? (
+                  <Badge tone={VERDICT_OUTCOME_TONES[run.verdictOutcome]} bold>
+                    {run.verdictOutcome}
+                  </Badge>
+                ) : (
+                  <span className="text-slate-400">&mdash;</span>
+                )}
+              </td>
+              <td className="px-4 py-2 text-slate-500">{new Date(run.createdAt).toLocaleString()}</td>
+              <td className="px-4 py-2">
+                <Link to={`/analysis-runs/${run.id}`} className="text-xs font-medium text-indigo-700 hover:underline">
+                  View Report &rarr;
+                </Link>
               </td>
             </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+          ))
+        ) : (
+          <EmptyTableRow colSpan={5}>No analysis runs for this repository yet.</EmptyTableRow>
+        )}
+      </TableBody>
+    </Table>
   )
 }
 
 function RecentVerdictsTable({ verdicts }: { verdicts: VerdictSummary[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-          <tr>
-            <th className="px-4 py-2">Pull Request</th>
-            <th className="px-4 py-2">Outcome</th>
-            <th className="px-4 py-2">Reasons</th>
-            <th className="px-4 py-2">Decided</th>
-            <th className="px-4 py-2">Report</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {verdicts.length ? (
-            verdicts.map((verdict) => (
-              <tr key={verdict.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2">
-                  <Link to={`/verdicts/${verdict.id}`} className="text-slate-900 hover:underline">
-                    #{verdict.pullRequestNumber}
-                  </Link>
-                </td>
-                <td className="px-4 py-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${OUTCOME_STYLES[verdict.outcome]}`}>
-                    {verdict.outcome}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-slate-700">{verdict.reasonsTotal}</td>
-                <td className="px-4 py-2 text-slate-500">{new Date(verdict.createdAt).toLocaleString()}</td>
-                <td className="px-4 py-2">
-                  <Link
-                    to={`/analysis-runs/${verdict.analysisRunId}`}
-                    className="text-xs font-medium text-indigo-700 hover:underline"
-                  >
-                    View Report &rarr;
-                  </Link>
-                </td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
-                No verdicts for this repository yet.
+    <Table>
+      <TableHead>
+        <tr>
+          <th className="px-4 py-2">Pull Request</th>
+          <th className="px-4 py-2">Outcome</th>
+          <th className="px-4 py-2">Reasons</th>
+          <th className="px-4 py-2">Decided</th>
+          <th className="px-4 py-2">Report</th>
+        </tr>
+      </TableHead>
+      <TableBody>
+        {verdicts.length ? (
+          verdicts.map((verdict) => (
+            <tr key={verdict.id} className="hover:bg-slate-50">
+              <td className="px-4 py-2">
+                <Link to={`/verdicts/${verdict.id}`} className="text-slate-900 hover:underline">
+                  #{verdict.pullRequestNumber}
+                </Link>
+              </td>
+              <td className="px-4 py-2">
+                <Badge tone={VERDICT_OUTCOME_TONES[verdict.outcome]} bold>
+                  {verdict.outcome}
+                </Badge>
+              </td>
+              <td className="px-4 py-2 text-slate-700 tabular-nums">{verdict.reasonsTotal}</td>
+              <td className="px-4 py-2 text-slate-500">{new Date(verdict.createdAt).toLocaleString()}</td>
+              <td className="px-4 py-2">
+                <Link
+                  to={`/analysis-runs/${verdict.analysisRunId}`}
+                  className="text-xs font-medium text-indigo-700 hover:underline"
+                >
+                  View Report &rarr;
+                </Link>
               </td>
             </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+          ))
+        ) : (
+          <EmptyTableRow colSpan={5}>No verdicts for this repository yet.</EmptyTableRow>
+        )}
+      </TableBody>
+    </Table>
   )
 }
 
-// Verbatim copy of DashboardPage's own StatCard/blockRatePercent - this
-// codebase's established convention is page-local render helpers (see
-// AnalysisRunDetailPage's own Field/FindingsTable, AIReviewRunDetailPage's
-// own Field), not a shared component extracted across pages, so DashboardPage
-// itself stays untouched.
 function StatCard({
   label,
   value,
@@ -325,7 +295,7 @@ function StatCard({
 }: {
   label: string
   value: number
-  tone?: 'critical' | 'high' | 'ai' | 'ai-alert' | 'approved' | 'blocked' | 'report'
+  tone?: 'critical' | 'high' | 'ai' | 'approved' | 'blocked' | 'report'
   suffix?: string
 }) {
   const valueClassName =
@@ -333,20 +303,18 @@ function StatCard({
       ? 'text-red-700'
       : tone === 'high' && value > 0
         ? 'text-orange-700'
-        : tone === 'ai-alert' && value > 0
-          ? 'text-red-700'
-          : tone === 'ai'
-            ? 'text-violet-700'
-            : tone === 'approved'
-              ? 'text-emerald-700'
-              : tone === 'blocked' && value > 0
-                ? 'text-red-700'
-                : tone === 'report'
-                  ? 'text-indigo-700'
-                  : 'text-slate-900'
+        : tone === 'ai'
+          ? 'text-violet-700'
+          : tone === 'approved'
+            ? 'text-emerald-700'
+            : tone === 'blocked' && value > 0
+              ? 'text-red-700'
+              : tone === 'report'
+                ? 'text-indigo-700'
+                : 'text-slate-900'
 
   const borderClassName =
-    tone === 'ai' || tone === 'ai-alert'
+    tone === 'ai'
       ? 'border-violet-200'
       : tone === 'approved'
         ? 'border-emerald-200'
@@ -357,9 +325,9 @@ function StatCard({
             : 'border-slate-200'
 
   return (
-    <div className={`rounded-lg border ${borderClassName} bg-white p-6 shadow-sm`}>
+    <div className={`rounded-lg border ${borderClassName} bg-white p-6 shadow-sm transition-shadow hover:shadow-md`}>
       <p className="text-sm text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold ${valueClassName}`}>
+      <p className={`mt-1 text-2xl font-semibold tabular-nums ${valueClassName}`}>
         {value}
         {suffix}
       </p>

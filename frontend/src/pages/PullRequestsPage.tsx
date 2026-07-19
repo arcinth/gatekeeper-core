@@ -2,38 +2,20 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { LoadingSpinner } from '../components/LoadingSpinner'
+import { Badge } from '../components/ui/Badge'
+import { ErrorState } from '../components/ui/ErrorState'
+import { Pagination } from '../components/ui/Pagination'
+import { EmptyTableRow, Table, TableBody, TableHead } from '../components/ui/Table'
+import { ANALYSIS_RUN_STATUS_TONES, PULL_REQUEST_STATUS_TONES, VERDICT_OUTCOME_TONES } from '../components/ui/badgeTones'
 import { pullRequestService } from '../services/pullRequestService'
 import { repositoryService } from '../services/repositoryService'
-import type { AnalysisRunStatus, PullRequestStatus } from '../types/analysisRun'
+import type { PullRequestStatus } from '../types/analysisRun'
 import type { PageResponse } from '../types/api'
 import type { PullRequestSummary } from '../types/pullRequest'
 import type { Repository } from '../types/repository'
-import type { VerdictOutcome } from '../types/verdict'
 
 const STATUS_OPTIONS: PullRequestStatus[] = ['OPEN', 'CLOSED', 'MERGED']
 const PAGE_SIZE = 20
-
-// Same badge language AnalysisRunsPage/AnalysisRunDetailPage already
-// established for these same two enums - this page shows the same latest-run
-// status and verdict outcome, just for a different (PR-scoped) row.
-const RUN_STATUS_STYLES: Record<AnalysisRunStatus, string> = {
-  RECEIVED: 'bg-slate-100 text-slate-700',
-  QUEUED: 'bg-slate-100 text-slate-700',
-  IN_PROGRESS: 'bg-amber-100 text-amber-800',
-  COMPLETED: 'bg-emerald-100 text-emerald-800',
-  FAILED: 'bg-red-100 text-red-800',
-}
-
-const VERDICT_STYLES: Record<VerdictOutcome, string> = {
-  APPROVED: 'bg-emerald-100 text-emerald-800',
-  BLOCKED: 'bg-red-100 text-red-800',
-}
-
-const PR_STATUS_STYLES: Record<PullRequestStatus, string> = {
-  OPEN: 'bg-emerald-100 text-emerald-800',
-  CLOSED: 'bg-slate-100 text-slate-700',
-  MERGED: 'bg-violet-100 text-violet-700',
-}
 
 export function PullRequestsPage() {
   const [page, setPage] = useState<PageResponse<PullRequestSummary> | null>(null)
@@ -64,10 +46,8 @@ export function PullRequestsPage() {
   }, [status, repositoryId, pageNumber])
 
   return (
-    <AppLayout>
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">Pull Requests</h1>
-
-      <div className="mb-4 flex gap-3">
+    <AppLayout title="Pull Requests" description="The reviewer's primary workspace.">
+      <div className="mb-4 flex flex-wrap gap-3">
         <select
           className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
           value={status}
@@ -101,117 +81,94 @@ export function PullRequestsPage() {
         </select>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
-      )}
+      {error && <ErrorState message={error} />}
 
       {isLoading ? (
         <LoadingSpinner />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-2">Pull Request</th>
-                <th className="px-4 py-2">Repository</th>
-                <th className="px-4 py-2">Author</th>
-                <th className="px-4 py-2">Branch</th>
-                <th className="px-4 py-2">Latest Analysis</th>
-                <th className="px-4 py-2">Verdict</th>
-                <th className="px-4 py-2">Last Updated</th>
-                <th className="px-4 py-2">GitHub</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {page?.content.length ? (
-                page.content.map((pr) => (
-                  <tr key={pr.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-2">
-                      <Link to={`/pull-requests/${pr.id}`} className="text-slate-900 hover:underline">
-                        #{pr.number} {pr.title}
+        <Table
+          footer={
+            page && (
+              <Pagination
+                page={page.page}
+                totalPages={page.totalPages}
+                first={page.first}
+                last={page.last}
+                onPrevious={() => setPageNumber((current) => current - 1)}
+                onNext={() => setPageNumber((current) => current + 1)}
+              />
+            )
+          }
+        >
+          <TableHead>
+            <tr>
+              <th className="px-4 py-2">Pull Request</th>
+              <th className="px-4 py-2">Repository</th>
+              <th className="px-4 py-2">Author</th>
+              <th className="px-4 py-2">Branch</th>
+              <th className="px-4 py-2">Latest Analysis</th>
+              <th className="px-4 py-2">Verdict</th>
+              <th className="px-4 py-2">Last Updated</th>
+              <th className="px-4 py-2">GitHub</th>
+            </tr>
+          </TableHead>
+          <TableBody>
+            {page?.content.length ? (
+              page.content.map((pr) => (
+                <tr key={pr.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-2">
+                    <Link to={`/pull-requests/${pr.id}`} className="text-slate-900 hover:underline">
+                      #{pr.number} {pr.title}
+                    </Link>
+                    <Badge tone={PULL_REQUEST_STATUS_TONES[pr.status]} className="ml-2">
+                      {pr.status}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-2 text-slate-700">{pr.repositoryFullName}</td>
+                  <td className="px-4 py-2 text-slate-700">{pr.authorLogin}</td>
+                  <td className="px-4 py-2 text-slate-500">
+                    {pr.sourceBranch} &rarr; {pr.targetBranch}
+                  </td>
+                  <td className="px-4 py-2">
+                    {pr.latestAnalysisRunStatus ? (
+                      <Link to={`/analysis-runs/${pr.latestAnalysisRunId}`}>
+                        <Badge tone={ANALYSIS_RUN_STATUS_TONES[pr.latestAnalysisRunStatus]}>
+                          {pr.latestAnalysisRunStatus}
+                        </Badge>
                       </Link>
-                      <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${PR_STATUS_STYLES[pr.status]}`}>
-                        {pr.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-slate-700">{pr.repositoryFullName}</td>
-                    <td className="px-4 py-2 text-slate-700">{pr.authorLogin}</td>
-                    <td className="px-4 py-2 text-slate-500">
-                      {pr.sourceBranch} &rarr; {pr.targetBranch}
-                    </td>
-                    <td className="px-4 py-2">
-                      {pr.latestAnalysisRunStatus ? (
-                        <Link to={`/analysis-runs/${pr.latestAnalysisRunId}`}>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${RUN_STATUS_STYLES[pr.latestAnalysisRunStatus]}`}
-                          >
-                            {pr.latestAnalysisRunStatus}
-                          </span>
-                        </Link>
-                      ) : (
-                        <span className="text-slate-400">&mdash;</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2">
-                      {pr.latestVerdictOutcome ? (
-                        <Link to={`/analysis-runs/${pr.latestAnalysisRunId}`}>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-bold ${VERDICT_STYLES[pr.latestVerdictOutcome]}`}
-                          >
-                            {pr.latestVerdictOutcome}
-                          </span>
-                        </Link>
-                      ) : (
-                        <span className="text-slate-400">&mdash;</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-slate-500">{new Date(pr.updatedAt).toLocaleString()}</td>
-                    <td className="px-4 py-2">
-                      <a
-                        href={pr.githubUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-slate-500 hover:underline"
-                      >
-                        View &rarr;
-                      </a>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
-                    No pull requests found.
+                    ) : (
+                      <span className="text-slate-400">&mdash;</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">
+                    {pr.latestVerdictOutcome ? (
+                      <Link to={`/analysis-runs/${pr.latestAnalysisRunId}`}>
+                        <Badge tone={VERDICT_OUTCOME_TONES[pr.latestVerdictOutcome]} bold>
+                          {pr.latestVerdictOutcome}
+                        </Badge>
+                      </Link>
+                    ) : (
+                      <span className="text-slate-400">&mdash;</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-slate-500">{new Date(pr.updatedAt).toLocaleString()}</td>
+                  <td className="px-4 py-2">
+                    <a
+                      href={pr.githubUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-slate-500 hover:underline"
+                    >
+                      View &rarr;
+                    </a>
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-
-          {page && page.totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm text-slate-600">
-              <span>
-                Page {page.page + 1} of {page.totalPages}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-50"
-                  disabled={page.first}
-                  onClick={() => setPageNumber((current) => current - 1)}
-                >
-                  Previous
-                </button>
-                <button
-                  className="rounded-md border border-slate-300 px-3 py-1 disabled:opacity-50"
-                  disabled={page.last}
-                  onClick={() => setPageNumber((current) => current + 1)}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+              ))
+            ) : (
+              <EmptyTableRow colSpan={8}>No pull requests found.</EmptyTableRow>
+            )}
+          </TableBody>
+        </Table>
       )}
     </AppLayout>
   )

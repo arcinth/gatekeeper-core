@@ -1,25 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { LoadingSpinner } from '../components/LoadingSpinner'
+import { Badge } from '../components/ui/Badge'
+import { Card } from '../components/ui/Card'
+import { ErrorState } from '../components/ui/ErrorState'
+import { EmptyTableRow, Table, TableBody, TableHead } from '../components/ui/Table'
+import { AI_CONFIDENCE_TONES, AI_REVIEW_RUN_STATUS_TONES } from '../components/ui/badgeTones'
 import { aiReviewRunService } from '../services/aiReviewRunService'
 import { aiReviewFindingService } from '../services/aiReviewFindingService'
-import type { AIReviewRunDetail, AIReviewRunStatus } from '../types/aiReviewRun'
+import type { AIReviewRunDetail } from '../types/aiReviewRun'
 import type { AIReviewConfidence, AIReviewFinding } from '../types/aiReviewFinding'
-
-// Deliberately violet throughout this page, distinct from every severity color used on the
-// deterministic (Policy/Security) findings tables - AI Review results are advisory only and
-// must read as visually distinct, not just differently labeled (Sprint 4 Milestone 4).
-const CONFIDENCE_STYLES: Record<AIReviewConfidence, string> = {
-  LOW: 'bg-violet-50 text-violet-600',
-  MEDIUM: 'bg-violet-100 text-violet-700',
-  HIGH: 'bg-violet-200 text-violet-900',
-}
-
-const STATUS_STYLES: Record<AIReviewRunStatus, string> = {
-  COMPLETED: 'bg-violet-100 text-violet-800',
-  FAILED: 'bg-red-100 text-red-800',
-}
 
 export function AIReviewRunDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -60,23 +51,23 @@ export function AIReviewRunDetailPage() {
   }
 
   return (
-    <AppLayout>
-      <Link to="/ai-review-runs" className="mb-4 inline-block text-sm text-slate-500 hover:underline">
-        &larr; Back to AI Review Runs
-      </Link>
-      <div className="mb-4 flex items-center gap-3">
-        <h1 className="text-xl font-semibold text-slate-900">
+    <AppLayout
+      title={
+        <>
           {run.repositoryFullName} #{run.pullRequestNumber}
-        </h1>
-        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700">
+        </>
+      }
+      eyebrow={
+        <Badge tone="bg-violet-100 text-violet-700" uppercase>
           Advisory &middot; AI Generated
-        </span>
-      </div>
-
-      <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-violet-200 bg-white p-6 shadow-sm md:grid-cols-4">
+        </Badge>
+      }
+      breadcrumbs={[{ label: 'AI Review Runs', to: '/ai-review-runs' }, { label: `#${run.pullRequestNumber}` }]}
+    >
+      <Card className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4" border="border border-violet-200">
         <Field
           label="Status"
-          value={<span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[run.status]}`}>{run.status}</span>}
+          value={<Badge tone={AI_REVIEW_RUN_STATUS_TONES[run.status]}>{run.status}</Badge>}
         />
         <Field label="Provider" value={run.provider} />
         <Field label="Model" value={run.model} />
@@ -84,7 +75,7 @@ export function AIReviewRunDetailPage() {
         <Field label="Commit" value={run.commitSha.slice(0, 7)} />
         <Field label="Created" value={new Date(run.createdAt).toLocaleString()} />
         <Field label="Updated" value={new Date(run.updatedAt).toLocaleString()} />
-      </div>
+      </Card>
 
       {run.summary && (
         <div className="mb-6 rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
@@ -93,64 +84,48 @@ export function AIReviewRunDetailPage() {
         </div>
       )}
 
-      {run.failureReason && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          <p className="font-medium">Failure reason</p>
-          <p className="mt-1">{run.failureReason}</p>
-        </div>
-      )}
+      {run.failureReason && <ErrorState message={run.failureReason} />}
 
       <h2 className="mb-2 text-lg font-semibold text-slate-900">AI Findings</h2>
-      <div className="mb-3 flex gap-3">
+      <div className="mb-3 flex flex-wrap gap-2">
         {Object.entries(run.findingsByConfidence).map(([confidence, count]) => (
-          <span
-            key={confidence}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${CONFIDENCE_STYLES[confidence as AIReviewConfidence] ?? 'bg-slate-100 text-slate-700'}`}
-          >
+          <Badge key={confidence} tone={AI_CONFIDENCE_TONES[confidence as AIReviewConfidence] ?? 'bg-slate-100 text-slate-700'}>
             {confidence}: {count}
-          </span>
+          </Badge>
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-violet-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-violet-50 text-left text-xs font-medium uppercase tracking-wide text-violet-700">
-            <tr>
-              <th className="px-4 py-2">Confidence</th>
-              <th className="px-4 py-2">Type</th>
-              <th className="px-4 py-2">Location</th>
-              <th className="px-4 py-2">Observation</th>
-              <th className="px-4 py-2">Recommendation</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {findings.length ? (
-              findings.map((finding) => (
-                <tr key={finding.id}>
-                  <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${CONFIDENCE_STYLES[finding.confidence]}`}>
-                      {finding.confidence}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-slate-700">{finding.type}</td>
-                  <td className="px-4 py-2 text-slate-500">
-                    {finding.filePath}
-                    {finding.lineNumber !== null ? `:${finding.lineNumber}` : ''}
-                  </td>
-                  <td className="px-4 py-2 text-slate-700">{finding.message}</td>
-                  <td className="px-4 py-2 text-slate-500">{finding.recommendation ?? '—'}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
-                  No AI findings for this run.
+      <Table tone="ai">
+        <TableHead tone="ai">
+          <tr>
+            <th className="px-4 py-2">Confidence</th>
+            <th className="px-4 py-2">Type</th>
+            <th className="px-4 py-2">Location</th>
+            <th className="px-4 py-2">Observation</th>
+            <th className="px-4 py-2">Recommendation</th>
+          </tr>
+        </TableHead>
+        <TableBody>
+          {findings.length ? (
+            findings.map((finding) => (
+              <tr key={finding.id}>
+                <td className="px-4 py-2">
+                  <Badge tone={AI_CONFIDENCE_TONES[finding.confidence]}>{finding.confidence}</Badge>
                 </td>
+                <td className="px-4 py-2 text-slate-700">{finding.type}</td>
+                <td className="px-4 py-2 text-slate-500">
+                  {finding.filePath}
+                  {finding.lineNumber !== null ? `:${finding.lineNumber}` : ''}
+                </td>
+                <td className="px-4 py-2 text-slate-700">{finding.message}</td>
+                <td className="px-4 py-2 text-slate-500">{finding.recommendation ?? '—'}</td>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            ))
+          ) : (
+            <EmptyTableRow colSpan={5}>No AI findings for this run.</EmptyTableRow>
+          )}
+        </TableBody>
+      </Table>
     </AppLayout>
   )
 }

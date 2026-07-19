@@ -185,7 +185,9 @@ GET  /api/v1/analysis-runs/{id}/review-decisions
 
 `POST` accepts `{"decision": "APPROVED" | "REJECTED", "comment": "..."}` (comment optional, max 2000 characters), records it against the authenticated caller, and returns 201 with the created decision. `GET` returns the full history for that run, newest first.
 
-Write-once: a reviewer changing their mind creates a new decision rather than editing a previous one, so the complete history is always preserved. Recording a decision has no effect on the Analysis Run, Verdict, or Pull Request - it is purely additive, observed data. It also has no effect on the GitHub Check Run; write-back to GitHub based on a review decision is explicitly out of scope for this milestone. No role restriction exists on who may submit a decision, and no self-review restriction.
+Write-once: a reviewer changing their mind creates a new decision rather than editing a previous one, so the complete history is always preserved. Recording a decision has no effect on the Analysis Run, Verdict, or Pull Request - it is purely additive, observed data. No role restriction exists on who may submit a decision, and no self-review restriction.
+
+**GitHub write-back (Milestone 4).** Recording a decision asynchronously publishes it to a separate GitHub Check Run named "GateKeeper Review" on the pull request's head commit (`APPROVED` &rarr; conclusion `success`, `REJECTED` &rarr; conclusion `failure`; the check's output names the reviewer, the decision, the optional comment, and the decision timestamp). A later decision on the same Analysis Run updates that same check rather than creating a duplicate, always reflecting the latest decision. This is a deliberately separate check from the Verdict-driven one - analysis and human review remain two independent sources of truth, consistent with this document's own guiding principle that merge decisions originate only from deterministic engines. Publication is best-effort: a repository with no linked GitHub installation, or any GitHub API failure, never affects the decision itself, which is already durably recorded before publication is attempted.
 
 ---
 

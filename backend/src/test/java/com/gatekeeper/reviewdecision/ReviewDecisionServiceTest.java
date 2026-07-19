@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ReviewDecisionServiceTest {
@@ -27,8 +28,9 @@ class ReviewDecisionServiceTest {
     private final ReviewDecisionRepository reviewDecisionRepository = mock(ReviewDecisionRepository.class);
     private final AnalysisRunRepository analysisRunRepository = mock(AnalysisRunRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final ReviewDecisionService service =
-            new ReviewDecisionService(reviewDecisionRepository, analysisRunRepository, userRepository);
+            new ReviewDecisionService(reviewDecisionRepository, analysisRunRepository, userRepository, eventPublisher);
 
     private final AnalysisRun analysisRun = AnalysisRun.builder().build();
     private final User reviewer = User.builder().fullName("Ada Reviewer").email("ada@example.com").build();
@@ -57,6 +59,7 @@ class ReviewDecisionServiceTest {
         assertThat(result.comment()).isEqualTo("Looks good");
         assertThat(result.reviewerId()).isEqualTo(9L);
         assertThat(result.reviewerName()).isEqualTo("Ada Reviewer");
+        verify(eventPublisher).publishEvent(new ReviewDecisionRecordedEvent(1L));
     }
 
     @Test
@@ -68,6 +71,7 @@ class ReviewDecisionServiceTest {
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(reviewDecisionRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -80,6 +84,7 @@ class ReviewDecisionServiceTest {
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(reviewDecisionRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

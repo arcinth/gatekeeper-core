@@ -9,6 +9,7 @@ import com.gatekeeper.user.User;
 import com.gatekeeper.user.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,16 @@ import org.springframework.transaction.annotation.Transactional;
  * gate on it (see V12__review_decisions.sql). No role check on who may
  * submit a decision and no self-review restriction - deliberate scope
  * exclusions for this milestone.
+ * <p>
+ * {@code create} publishes {@link ReviewDecisionRecordedEvent} at the end of
+ * its own transaction (Milestone 4), the same "publish once the write has
+ * happened" convention {@code AnalysisResultPersistenceService} already
+ * established for {@code VerdictProducedEvent} - see
+ * {@code GitHubReviewDecisionCheckRunPublisher}'s Javadoc for why its
+ * {@code @Async}/{@code AFTER_COMMIT} listener is required for correctness,
+ * not an optimization. This class itself still never reads or writes
+ * anything GitHub-related directly - it only announces that a decision now
+ * exists.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,6 +40,7 @@ public class ReviewDecisionService {
     private final ReviewDecisionRepository reviewDecisionRepository;
     private final AnalysisRunRepository analysisRunRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ReviewDecisionResponse create(Long analysisRunId, Long reviewerId, CreateReviewDecisionRequest request) {
@@ -43,6 +55,8 @@ public class ReviewDecisionService {
                 .decision(request.decision())
                 .comment(request.comment())
                 .build());
+
+        eventPublisher.publishEvent(new ReviewDecisionRecordedEvent(analysisRunId));
         return ReviewDecisionResponse.from(reviewDecision);
     }
 

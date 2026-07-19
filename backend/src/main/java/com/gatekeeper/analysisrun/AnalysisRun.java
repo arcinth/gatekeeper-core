@@ -57,4 +57,13 @@ public class AnalysisRun extends BaseEntity {
     /** GitHub's check run id, once GitHubCheckRunService has created one; null until then. */
     @Column(name = "github_check_run_id")
     private Long githubCheckRunId;
+
+    /**
+     * GitHub's check run id for the separate "GateKeeper Review" check (see
+     * GitHubReviewDecisionCheckRunService); null until a ReviewDecision has
+     * been published. Deliberately a distinct column from githubCheckRunId -
+     * the two check runs are independent signals and must never share an id.
+     */
+    @Column(name = "github_review_check_run_id")
+    private Long githubReviewCheckRunId;
 }

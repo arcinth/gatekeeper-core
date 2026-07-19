@@ -15,11 +15,16 @@ import java.util.List;
  * for this milestone. Callers construct ChangedFiles directly for now.
  *
  * @param analysisRunId    identifies which AnalysisRun this evaluation belongs to
+ * @param organizationId   whose {@link PolicyConfigurationSet} PolicyEngineService
+ *                         must load (Milestone 6: Policy Management) - a plain id,
+ *                         the same "no live entity reference" reasoning as everything
+ *                         else on this record
  * @param repositoryFullName the "org/repo" the AnalysisRun's PullRequest belongs to, for logging
  * @param changedFiles      the file contents to evaluate rules against
  */
 public record PolicyContext(
         Long analysisRunId,
+        Long organizationId,
         String repositoryFullName,
         List<ChangedFile> changedFiles) {
 

@@ -241,19 +241,25 @@ GET /api/v1/pull-requests/{id}/report
 
 ## Policies API
 
-Manage organization policies.
+Organization-scoped configuration of the Policy Engine's rules (Milestone 6: Policy Management). See [Policy-Development.md](./Policy-Development.md) for how rules are written and why the rule catalog is never duplicated in the database.
 
 ### Endpoints
 
 ```
-GET /api/v1/policies
+GET    /api/v1/policies
 
-POST /api/v1/policies
+PUT    /api/v1/policies/{ruleId}
 
-PUT /api/v1/policies/{id}
-
-DELETE /api/v1/policies/{id}
+DELETE /api/v1/policies/{ruleId}
 ```
+
+No `POST`: the rule catalog is entirely code-defined (`PolicyRule` beans discovered by Spring) - organizations configure an existing rule, they never create one. `{ruleId}` is one of those beans' stable `id()` (e.g. `TODO_COMMENT`); an unrecognized id 404s.
+
+`GET` returns every discovered rule merged with the calling user's organization's effective configuration - `ruleId`, `description`, `defaultCategory`, `defaultSeverity` always reflect the live rule, never a database row. Requires `WORKSPACE_READ` (every role).
+
+`PUT` accepts `{"enabled": true|false, "severityOverride": "LOW"|"MEDIUM"|"HIGH"|"CRITICAL"|null}` and upserts the organization's override. `DELETE` resets the rule to its default (idempotent - deletes the override row if one exists). Both require `POLICY_MANAGE` (ADMINISTRATOR, PLATFORM_ENGINEER - see [Authorization-Model.md](./Authorization-Model.md)).
+
+A configuration change only affects *future* analysis runs; every already-persisted `PolicyFinding` and completed `AnalysisRun` permanently reflects the configuration in effect when it was produced.
 
 ---
 

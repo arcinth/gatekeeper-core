@@ -5,6 +5,7 @@ import {
   Gavel,
   GitPullRequest,
   LayoutDashboard,
+  ListChecks,
   ShieldAlert,
   Sparkles,
   Users,
@@ -52,6 +53,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Administration',
     items: [
       { label: 'Repositories', path: '/repositories', icon: FolderGit2 },
+      { label: 'Policies', path: '/policies', icon: ListChecks },
       { label: 'Users', path: '/users', icon: Users },
     ],
   },

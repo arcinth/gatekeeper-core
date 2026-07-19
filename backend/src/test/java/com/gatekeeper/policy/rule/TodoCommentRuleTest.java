@@ -45,7 +45,7 @@ class TodoCommentRuleTest {
 
     @Test
     void evaluate_findsMultipleOccurrencesAcrossMultipleFiles() {
-        PolicyContext context = new PolicyContext(1L, "org/repo", List.of(
+        PolicyContext context = new PolicyContext(1L, 1L, "org/repo", List.of(
                 new PolicyContext.ChangedFile("a.txt", "// TODO one\nclean line\n// TODO two"),
                 new PolicyContext.ChangedFile("b.txt", "// TODO three")));
 
@@ -65,7 +65,7 @@ class TodoCommentRuleTest {
 
     @Test
     void evaluate_returnsEmptyListWhenThereAreNoChangedFiles() {
-        PolicyContext context = new PolicyContext(1L, "org/repo", List.of());
+        PolicyContext context = new PolicyContext(1L, 1L, "org/repo", List.of());
 
         assertThat(rule.evaluate(context)).isEmpty();
     }
@@ -78,6 +78,6 @@ class TodoCommentRuleTest {
     }
 
     private PolicyContext contextWith(String path, String content) {
-        return new PolicyContext(1L, "org/repo", List.of(new PolicyContext.ChangedFile(path, content)));
+        return new PolicyContext(1L, 1L, "org/repo", List.of(new PolicyContext.ChangedFile(path, content)));
     }
 }

@@ -6,9 +6,10 @@ import com.gatekeeper.role.RoleName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Exhaustively pins the role -> permission matrix approved for Milestone 5.
- * If this test needs to change, docs/Authorization-Model.md's matrix table
- * must change with it - they are two views of the same fact.
+ * Exhaustively pins the role -> permission matrix approved across Milestone 5
+ * (RBAC Enforcement) and Milestone 6 (Policy Management). If this test needs
+ * to change, docs/Authorization-Model.md's matrix table must change with it -
+ * they are two views of the same fact.
  */
 class RolePermissionsTest {
 
@@ -18,16 +19,18 @@ class RolePermissionsTest {
                 Permission.WORKSPACE_READ,
                 Permission.REVIEW_DECISION_CREATE,
                 Permission.REPOSITORY_MANAGE,
+                Permission.POLICY_MANAGE,
                 Permission.USER_MANAGE,
                 Permission.ROLE_MANAGE);
     }
 
     @Test
-    void platformEngineer_canReadReviewAndManageRepositories_butNotUsersOrRoles() {
+    void platformEngineer_canReadReviewManageRepositoriesAndPolicies_butNotUsersOrRoles() {
         assertThat(RolePermissions.forRole(RoleName.PLATFORM_ENGINEER)).containsExactlyInAnyOrder(
                 Permission.WORKSPACE_READ,
                 Permission.REVIEW_DECISION_CREATE,
-                Permission.REPOSITORY_MANAGE);
+                Permission.REPOSITORY_MANAGE,
+                Permission.POLICY_MANAGE);
     }
 
     @Test

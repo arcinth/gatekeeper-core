@@ -1,10 +1,14 @@
 package com.gatekeeper.policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import com.gatekeeper.policyconfiguration.PolicyConfigurationService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -20,6 +24,10 @@ import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
  * Scoped to a @ComponentScan of just the policy package - not a full
  * @SpringBootTest - so this stays fast and independent of the datasource,
  * matching the rest of this milestone's "no persistence yet" scope.
+ * PolicyConfigurationService (Milestone 6) is provided as a hand-mocked
+ * @Bean rather than the real, JPA-backed implementation, for the same
+ * reason - PolicyEngineService needs one to construct, but this test has no
+ * interest in policy configuration persistence, only rule discovery.
  */
 @SpringJUnitConfig(PolicyEngineIntegrationTest.PolicyPackageConfig.class)
 class PolicyEngineIntegrationTest {
@@ -27,6 +35,13 @@ class PolicyEngineIntegrationTest {
     @Configuration
     @ComponentScan(basePackages = "com.gatekeeper.policy")
     static class PolicyPackageConfig {
+
+        @Bean
+        PolicyConfigurationService policyConfigurationService() {
+            PolicyConfigurationService mock = mock(PolicyConfigurationService.class);
+            when(mock.buildConfigurationSet(org.mockito.ArgumentMatchers.anyLong())).thenReturn(PolicyConfigurationSet.EMPTY);
+            return mock;
+        }
     }
 
     @Autowired
@@ -47,7 +62,7 @@ class PolicyEngineIntegrationTest {
 
     @Test
     void engineEndToEnd_aggregatesFindingsFromAllDiscoveredRulesForAMixedFile() {
-        PolicyContext context = new PolicyContext(100L, "gatekeeper/core", List.of(
+        PolicyContext context = new PolicyContext(100L, 1L, "gatekeeper/core", List.of(
                 new PolicyContext.ChangedFile(
                         "src/main/java/Example.java",
                         "class Example {\n"
@@ -57,7 +72,7 @@ class PolicyEngineIntegrationTest {
                                 + "    }\n"
                                 + "}")));
 
-        PolicyResult result = policyEngine.evaluate(context);
+        PolicyResult result = policyEngine.evaluate(context, PolicyConfigurationSet.EMPTY);
 
         assertThat(result.rulesEvaluated()).isEqualTo(2);
         assertThat(result.findings()).hasSize(2);
@@ -68,7 +83,7 @@ class PolicyEngineIntegrationTest {
 
     @Test
     void serviceEndToEnd_delegatesThroughTheRealSpringWiredEngine() {
-        PolicyContext context = new PolicyContext(101L, "gatekeeper/core", List.of(
+        PolicyContext context = new PolicyContext(101L, 1L, "gatekeeper/core", List.of(
                 new PolicyContext.ChangedFile("a.txt", "// TODO: wire this up")));
 
         PolicyResult result = policyEngineService.evaluate(context);
@@ -79,10 +94,10 @@ class PolicyEngineIntegrationTest {
 
     @Test
     void engineEndToEnd_returnsCleanResultWhenNoMarkersArePresent() {
-        PolicyContext context = new PolicyContext(102L, "gatekeeper/core", List.of(
+        PolicyContext context = new PolicyContext(102L, 1L, "gatekeeper/core", List.of(
                 new PolicyContext.ChangedFile("clean.txt", "class Clean {\n    void ok() {}\n}")));
 
-        PolicyResult result = policyEngine.evaluate(context);
+        PolicyResult result = policyEngine.evaluate(context, PolicyConfigurationSet.EMPTY);
 
         assertThat(result.hasFindings()).isFalse();
         assertThat(result.rulesEvaluated()).isEqualTo(2);

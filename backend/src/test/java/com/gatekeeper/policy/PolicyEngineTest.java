@@ -1,8 +1,10 @@
 package com.gatekeeper.policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,7 +20,7 @@ class PolicyEngineTest {
                 fixedFindingRule("RULE_A", finding("RULE_A")),
                 fixedFindingRule("RULE_B", finding("RULE_B"))));
 
-        PolicyResult result = engine.evaluate(context());
+        PolicyResult result = engine.evaluate(context(), PolicyConfigurationSet.EMPTY);
 
         assertThat(result.findings()).hasSize(2);
         assertThat(result.rulesEvaluated()).isEqualTo(2);
@@ -29,7 +31,7 @@ class PolicyEngineTest {
     void evaluate_returnsEmptyResultWhenNoRulesAreRegistered() {
         PolicyEngine engine = new PolicyEngine(List.of());
 
-        PolicyResult result = engine.evaluate(context());
+        PolicyResult result = engine.evaluate(context(), PolicyConfigurationSet.EMPTY);
 
         assertThat(result.findings()).isEmpty();
         assertThat(result.rulesEvaluated()).isZero();
@@ -45,7 +47,7 @@ class PolicyEngineTest {
         RecordingRule ruleB = recordingRule("RULE_B");
         PolicyEngine engine = new PolicyEngine(List.of(ruleC, ruleA, ruleB));
 
-        engine.evaluate(context());
+        engine.evaluate(context(), PolicyConfigurationSet.EMPTY);
 
         assertThat(List.of(ruleA.invokedAt, ruleB.invokedAt, ruleC.invokedAt))
                 .isSortedAccordingTo(Integer::compareTo);
@@ -62,13 +64,21 @@ class PolicyEngineTest {
                 return "always throws";
             }
 
+            public PolicyCategory defaultCategory() {
+                return PolicyCategory.CODE_QUALITY;
+            }
+
+            public PolicySeverity defaultSeverity() {
+                return PolicySeverity.LOW;
+            }
+
             public List<PolicyFinding> evaluate(PolicyContext context) {
                 throw new IllegalStateException("simulated rule bug");
             }
         };
         PolicyEngine engine = new PolicyEngine(List.of(throwing, fixedFindingRule("HEALTHY_RULE", finding("HEALTHY_RULE"))));
 
-        PolicyResult result = engine.evaluate(context());
+        PolicyResult result = engine.evaluate(context(), PolicyConfigurationSet.EMPTY);
 
         assertThat(result.rulesEvaluated()).isEqualTo(2);
         assertThat(result.findings()).hasSize(1);
@@ -86,13 +96,21 @@ class PolicyEngineTest {
                 return "misbehaves";
             }
 
+            public PolicyCategory defaultCategory() {
+                return PolicyCategory.CODE_QUALITY;
+            }
+
+            public PolicySeverity defaultSeverity() {
+                return PolicySeverity.LOW;
+            }
+
             public List<PolicyFinding> evaluate(PolicyContext context) {
                 return null;
             }
         };
         PolicyEngine engine = new PolicyEngine(List.of(returnsNull));
 
-        PolicyResult result = engine.evaluate(context());
+        PolicyResult result = engine.evaluate(context(), PolicyConfigurationSet.EMPTY);
 
         assertThat(result.findings()).isEmpty();
         assertThat(result.rulesEvaluated()).isEqualTo(1);
@@ -105,7 +123,8 @@ class PolicyEngineTest {
         try {
             List<CompletableFuture<PolicyResult>> futures = java.util.stream.IntStream.range(0, 50)
                     .mapToObj(i -> CompletableFuture.supplyAsync(
-                            () -> engine.evaluate(new PolicyContext((long) i, "org/repo", List.of())), executor))
+                            () -> engine.evaluate(new PolicyContext((long) i, 1L, "org/repo", List.of()), PolicyConfigurationSet.EMPTY),
+                            executor))
                     .toList();
 
             List<PolicyResult> results = futures.stream().map(CompletableFuture::join).toList();
@@ -122,8 +141,56 @@ class PolicyEngineTest {
         }
     }
 
+    // --- Milestone 6: Policy Management ---
+
+    @Test
+    void evaluate_skipsARuleTheOrganizationHasDisabled() {
+        PolicyEngine engine = new PolicyEngine(List.of(
+                fixedFindingRule("RULE_A", finding("RULE_A")),
+                fixedFindingRule("RULE_B", finding("RULE_B"))));
+        PolicyConfigurationSet configuration = new PolicyConfigurationSet(Map.of("RULE_A", false), Map.of());
+
+        PolicyResult result = engine.evaluate(context(), configuration);
+
+        assertThat(result.rulesEvaluated()).isEqualTo(1);
+        assertThat(result.findings()).extracting(PolicyFinding::ruleId).containsExactly("RULE_B");
+    }
+
+    @Test
+    void evaluate_remapsAFindingsSeverityWhenTheOrganizationOverridesIt() {
+        PolicyEngine engine = new PolicyEngine(List.of(fixedFindingRule("RULE_A", finding("RULE_A"))));
+        PolicyConfigurationSet configuration = new PolicyConfigurationSet(Map.of(), Map.of("RULE_A", PolicySeverity.CRITICAL));
+
+        PolicyResult result = engine.evaluate(context(), configuration);
+
+        assertThat(result.findings()).hasSize(1);
+        assertThat(result.findings().get(0).severity()).isEqualTo(PolicySeverity.CRITICAL);
+        // Only severity changes - everything else about the finding is untouched.
+        assertThat(result.findings().get(0).category()).isEqualTo(PolicyCategory.CODE_QUALITY);
+    }
+
+    @Test
+    void evaluate_withNoConfigurationAtAll_behavesExactlyAsBeforeMilestone6() {
+        PolicyEngine engine = new PolicyEngine(List.of(fixedFindingRule("RULE_A", finding("RULE_A"))));
+
+        PolicyResult result = engine.evaluate(context(), PolicyConfigurationSet.EMPTY);
+
+        assertThat(result.rulesEvaluated()).isEqualTo(1);
+        assertThat(result.findings()).hasSize(1);
+        assertThat(result.findings().get(0).severity()).isEqualTo(PolicySeverity.LOW);
+    }
+
+    @Test
+    void constructor_failsFastWhenTwoRulesShareAnId() {
+        assertThatThrownBy(() -> new PolicyEngine(List.of(
+                fixedFindingRule("DUPLICATE_ID", finding("DUPLICATE_ID")),
+                fixedFindingRule("DUPLICATE_ID", finding("DUPLICATE_ID")))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DUPLICATE_ID");
+    }
+
     private PolicyContext context() {
-        return new PolicyContext(1L, "org/repo", List.of());
+        return new PolicyContext(1L, 1L, "org/repo", List.of());
     }
 
     private PolicyFinding finding(String ruleId) {
@@ -138,6 +205,14 @@ class PolicyEngineTest {
 
             public String description() {
                 return "test rule " + id;
+            }
+
+            public PolicyCategory defaultCategory() {
+                return PolicyCategory.CODE_QUALITY;
+            }
+
+            public PolicySeverity defaultSeverity() {
+                return PolicySeverity.LOW;
             }
 
             public List<PolicyFinding> evaluate(PolicyContext context) {
@@ -167,6 +242,14 @@ class PolicyEngineTest {
 
         public String description() {
             return "recording rule " + id;
+        }
+
+        public PolicyCategory defaultCategory() {
+            return PolicyCategory.CODE_QUALITY;
+        }
+
+        public PolicySeverity defaultSeverity() {
+            return PolicySeverity.LOW;
         }
 
         public List<PolicyFinding> evaluate(PolicyContext context) {

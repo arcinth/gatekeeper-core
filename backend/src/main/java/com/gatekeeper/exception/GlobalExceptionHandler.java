@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -52,6 +53,20 @@ public class GlobalExceptionHandler {
         String message = "Invalid value '" + ex.getValue() + "' for parameter '" + ex.getName() + "'.";
         return ResponseEntity.status(ErrorCode.GK_400.getHttpStatus())
                 .body(ApiErrorResponse.of(ErrorCode.GK_400.getCode(), message));
+    }
+
+    /**
+     * Without this, a malformed request body - most commonly an invalid enum
+     * value, e.g. POST .../review-decisions with {"decision": "MAYBE"} - fails
+     * during JSON deserialization, before any @Valid constraint runs, and falls
+     * through to the generic 500 handler below for what is actually a client
+     * input error, the same reasoning as handleTypeMismatch above for invalid
+     * enum query params.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        return ResponseEntity.status(ErrorCode.GK_400.getHttpStatus())
+                .body(ApiErrorResponse.of(ErrorCode.GK_400.getCode(), "Malformed or invalid request body."));
     }
 
     /**

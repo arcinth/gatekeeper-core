@@ -1,10 +1,12 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { pullRequestService } from '../services/pullRequestService'
+import { reviewDecisionService } from '../services/reviewDecisionService'
 import type { AnalysisRunStatus, PullRequestStatus } from '../types/analysisRun'
 import type { PullRequestAnalysisRunReference, PullRequestDetail } from '../types/pullRequest'
+import type { ReviewDecision, ReviewDecisionType } from '../types/reviewDecision'
 import type { VerdictOutcome } from '../types/verdict'
 
 // Same badge language as PullRequestsPage/AnalysisRunsPage/AnalysisRunDetailPage.
@@ -19,6 +21,13 @@ const RUN_STATUS_STYLES: Record<AnalysisRunStatus, string> = {
 const VERDICT_STYLES: Record<VerdictOutcome, string> = {
   APPROVED: 'bg-emerald-100 text-emerald-800',
   BLOCKED: 'bg-red-100 text-red-800',
+}
+
+// Same green/red pairing as VERDICT_STYLES - a reviewer's APPROVED/REJECTED
+// call reads with the same visual language as the engine's own verdict.
+const DECISION_STYLES: Record<ReviewDecisionType, string> = {
+  APPROVED: 'bg-emerald-100 text-emerald-800',
+  REJECTED: 'bg-red-100 text-red-800',
 }
 
 const PR_STATUS_STYLES: Record<PullRequestStatus, string> = {
@@ -101,15 +110,7 @@ export function PullRequestDetailPage() {
         <Field label="Updated" value={new Date(pullRequest.updatedAt).toLocaleString()} />
       </div>
 
-      {/*
-        Review section reserved now so the page layout stays stable once
-        Milestone 2 adds real reviewer actions here - placeholder only, no
-        approve/reject/override capability yet.
-      */}
-      <div className="mb-6 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-6">
-        <h2 className="mb-1 text-lg font-semibold text-slate-900">Review</h2>
-        <p className="text-sm text-slate-500">Reviewer actions are not available yet - coming in a future update.</p>
-      </div>
+      <ReviewSection latestRun={pullRequest.analysisRuns[0]} />
 
       <h2 className="mb-2 text-lg font-semibold text-slate-900">Analysis History</h2>
       <AnalysisRunHistoryTable analysisRuns={pullRequest.analysisRuns} />
@@ -168,6 +169,130 @@ function AnalysisRunHistoryTable({ analysisRuns }: { analysisRuns: PullRequestAn
           )}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/**
+ * Reviewer actions attach to the PR's latest analysis run (analysisRuns[0] -
+ * already newest-first from the API), the run currently relevant for review.
+ * If a newer run lands mid-review, the "latest run" pointer simply moves on
+ * next load - no real-time updates exist anywhere else in this app either
+ * (Milestone 2 scope note). No role/self-review gating: the backend enforces
+ * none, and the frontend deliberately doesn't invent one.
+ */
+function ReviewSection({ latestRun }: { latestRun: PullRequestAnalysisRunReference | undefined }) {
+  const [history, setHistory] = useState<ReviewDecision[]>([])
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [decision, setDecision] = useState<ReviewDecisionType>('APPROVED')
+  const [comment, setComment] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!latestRun) {
+      setIsLoadingHistory(false)
+      return
+    }
+    setIsLoadingHistory(true)
+    setHistoryError(null)
+    reviewDecisionService
+      .list(latestRun.id)
+      .then(setHistory)
+      .catch(() => setHistoryError('Failed to load review history.'))
+      .finally(() => setIsLoadingHistory(false))
+  }, [latestRun])
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!latestRun) {
+      return
+    }
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const created = await reviewDecisionService.create(latestRun.id, {
+        decision,
+        comment: comment.trim() ? comment.trim() : undefined,
+      })
+      setHistory((current) => [created, ...current])
+      setComment('')
+    } catch {
+      setSubmitError('Failed to record your decision. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-slate-900">Review</h2>
+
+      {!latestRun ? (
+        <p className="text-sm text-slate-500">No analysis yet to review.</p>
+      ) : (
+        <>
+          <form onSubmit={(event) => void handleSubmit(event)} className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">Decision</label>
+              <select
+                value={decision}
+                onChange={(event) => setDecision(event.target.value as ReviewDecisionType)}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
+              >
+                <option value="APPROVED">Approve</option>
+                <option value="REJECTED">Reject</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-slate-500">Comment (optional)</label>
+              <textarea
+                value={comment}
+                onChange={(event) => setComment(event.target.value)}
+                rows={1}
+                maxLength={2000}
+                placeholder="Add context for this decision..."
+                className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="rounded-md border border-slate-800 bg-slate-800 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {isSubmitting ? 'Submitting...' : 'Submit Decision'}
+            </button>
+          </form>
+
+          {submitError && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{submitError}</div>
+          )}
+
+          {isLoadingHistory ? (
+            <LoadingSpinner />
+          ) : historyError ? (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{historyError}</div>
+          ) : history.length ? (
+            <ul className="divide-y divide-slate-100">
+              {history.map((entry) => (
+                <li key={entry.id} className="py-3 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${DECISION_STYLES[entry.decision]}`}>
+                      {entry.decision}
+                    </span>
+                    <span className="text-sm font-medium text-slate-900">{entry.reviewerName}</span>
+                    <span className="text-xs text-slate-400">{new Date(entry.createdAt).toLocaleString()}</span>
+                  </div>
+                  {entry.comment && <p className="mt-1 text-sm text-slate-600">{entry.comment}</p>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No review decisions recorded yet.</p>
+          )}
+        </>
+      )}
     </div>
   )
 }

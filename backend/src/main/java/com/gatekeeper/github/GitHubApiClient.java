@@ -4,6 +4,7 @@ import com.gatekeeper.github.dto.CheckRunResponse;
 import com.gatekeeper.github.dto.CreateCheckRunRequest;
 import com.gatekeeper.github.dto.GitHubFileChange;
 import com.gatekeeper.github.dto.InstallationAccessTokenResponse;
+import com.gatekeeper.github.dto.InstallationRepositoriesResponse;
 import com.gatekeeper.github.dto.UpdateCheckRunRequest;
 import com.gatekeeper.github.exception.GitHubApiException;
 import com.gatekeeper.github.exception.GitHubTransientApiException;
@@ -30,6 +31,7 @@ import org.springframework.web.client.RestClientResponseException;
 public class GitHubApiClient {
 
     private static final int FILES_PER_PAGE = 100;
+    private static final int REPOSITORIES_PER_PAGE = 100;
 
     private final RestClient restClient;
     private final int maxChangedFilesPerPullRequest;
@@ -108,6 +110,58 @@ public class GitHubApiClient {
             return allFiles.subList(0, maxChangedFilesPerPullRequest);
         }
         return allFiles;
+    }
+
+    /**
+     * Lists every repository the installation currently has access to,
+     * paginated - the authoritative source for repository synchronization
+     * (see GitHubRepositorySyncService), since neither the "installation" nor
+     * "installation_repositories" webhook can be relied on alone to deliver
+     * the complete list at install time.
+     */
+    @Retryable(
+            retryFor = GitHubTransientApiException.class,
+            maxAttemptsExpression = "${gatekeeper.github.api.retry.max-attempts:3}",
+            backoff = @Backoff(
+                    delayExpression = "${gatekeeper.github.api.retry.initial-backoff-ms:500}",
+                    multiplierExpression = "${gatekeeper.github.api.retry.backoff-multiplier:2}"))
+    public List<InstallationRepositoriesResponse.RepositorySummary> listInstallationRepositories(
+            String installationAccessToken) {
+        List<InstallationRepositoriesResponse.RepositorySummary> allRepositories = new ArrayList<>();
+        int page = 1;
+        while (true) {
+            List<InstallationRepositoriesResponse.RepositorySummary> pageOfRepositories =
+                    fetchInstallationRepositoriesPage(installationAccessToken, page).repositories();
+            allRepositories.addAll(pageOfRepositories);
+            if (pageOfRepositories.size() < REPOSITORIES_PER_PAGE) {
+                break;
+            }
+            page++;
+        }
+        return allRepositories;
+    }
+
+    private InstallationRepositoriesResponse fetchInstallationRepositoriesPage(
+            String installationAccessToken, int page) {
+        try {
+            InstallationRepositoriesResponse response = restClient.get()
+                    .uri("/installation/repositories?per_page={perPage}&page={page}", REPOSITORIES_PER_PAGE, page)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationAccessToken)
+                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .retrieve()
+                    .body(InstallationRepositoriesResponse.class);
+            return response == null ? new InstallationRepositoriesResponse(0, List.of()) : response;
+        } catch (RestClientResponseException ex) {
+            String message = "GitHub returned an error listing installation repositories (HTTP "
+                    + ex.getStatusCode().value() + ").";
+            if (isTransient(ex.getStatusCode())) {
+                throw new GitHubTransientApiException(message, ex);
+            }
+            throw new GitHubApiException(message, ex);
+        } catch (RestClientException ex) {
+            throw new GitHubTransientApiException("Failed to reach GitHub while listing installation repositories.", ex);
+        }
     }
 
     /**

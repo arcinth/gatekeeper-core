@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.gatekeeper.github.GitHubInstallation;
 import com.gatekeeper.github.GitHubInstallationRepository;
+import com.gatekeeper.github.dto.InstallationRepositoriesResponse.RepositorySummary;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload.InstallationReference;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload.RepositoryReference;
@@ -127,6 +128,53 @@ class RepositoryServiceTest {
         service.handleInstallationRepositoriesEvent(
                 payload("added", List.of(new RepositoryReference(GITHUB_REPOSITORY_ID, "core", "octocat/core")), List.of()),
                 DELIVERY_ID);
+
+        verify(repositoryRepository, never()).save(any());
+    }
+
+    @Test
+    void synchronizeFromInstallation_createsARepositoryForEachEntryGitHubReports() {
+        when(repositoryRepository.findByGithubRepositoryId(GITHUB_REPOSITORY_ID)).thenReturn(Optional.empty());
+
+        service.synchronizeFromInstallation(INSTALLATION_ID,
+                List.of(new RepositorySummary(GITHUB_REPOSITORY_ID, "gatekeeper-core", "arcinth/gatekeeper-core")));
+
+        ArgumentCaptor<Repository> saved = ArgumentCaptor.forClass(Repository.class);
+        verify(repositoryRepository).save(saved.capture());
+        Repository repository = saved.getValue();
+        assertThat(repository.getGithubRepositoryId()).isEqualTo(GITHUB_REPOSITORY_ID);
+        assertThat(repository.getName()).isEqualTo("gatekeeper-core");
+        assertThat(repository.getFullName()).isEqualTo("arcinth/gatekeeper-core");
+        assertThat(repository.getOwner()).isEqualTo("arcinth");
+        assertThat(repository.getGithubInstallation()).isEqualTo(installation);
+        assertThat(repository.isActive()).isTrue();
+    }
+
+    @Test
+    void synchronizeFromInstallation_reactivatesAnExistingRepositoryRatherThanDuplicatingIt() {
+        Repository existing = Repository.builder()
+                .organization(organization)
+                .githubRepositoryId(GITHUB_REPOSITORY_ID)
+                .fullName("arcinth/gatekeeper-core")
+                .active(false)
+                .build();
+        when(repositoryRepository.findByGithubRepositoryId(GITHUB_REPOSITORY_ID)).thenReturn(Optional.of(existing));
+
+        service.synchronizeFromInstallation(INSTALLATION_ID,
+                List.of(new RepositorySummary(GITHUB_REPOSITORY_ID, "gatekeeper-core", "arcinth/gatekeeper-core")));
+
+        ArgumentCaptor<Repository> saved = ArgumentCaptor.forClass(Repository.class);
+        verify(repositoryRepository).save(saved.capture());
+        assertThat(saved.getValue()).isSameAs(existing);
+        assertThat(existing.isActive()).isTrue();
+    }
+
+    @Test
+    void synchronizeFromInstallation_doesNothingForAnUnknownInstallation() {
+        when(gitHubInstallationRepository.findByInstallationId(INSTALLATION_ID)).thenReturn(Optional.empty());
+
+        service.synchronizeFromInstallation(INSTALLATION_ID,
+                List.of(new RepositorySummary(GITHUB_REPOSITORY_ID, "gatekeeper-core", "arcinth/gatekeeper-core")));
 
         verify(repositoryRepository, never()).save(any());
     }

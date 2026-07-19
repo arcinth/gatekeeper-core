@@ -2,6 +2,7 @@ package com.gatekeeper.orchestration;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -15,26 +16,28 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * multicaster, so delegating to a different bean's {@code @Transactional}
  * method here is a normal, safe proxy call, not self-invocation.
  * <p>
- * Deliberately not {@code @Async}: both events are already published from an
- * async pipeline thread (analysisExecutionTaskExecutor or aiReviewTaskExecutor
- * respectively - see VerdictProducedEvent/AIReviewFinishedEvent's Javadoc for
- * where), and report publication is pure DB work with no external I/O, so
- * running synchronously on that already-async thread costs nothing and needs
- * no third thread pool.
+ * <b>{@code @Async} is required for correctness here, not an optimization</b>
+ * (see {@link GitHubCheckRunPublisher}'s Javadoc for the full mechanism):
+ * {@code @TransactionalEventListener(phase = AFTER_COMMIT)} callbacks run
+ * before the committing transaction's {@code EntityManagerHolder} is unbound
+ * from {@code TransactionSynchronizationManager}. Running synchronously here
+ * (as this class previously did) meant {@code ReportPublicationService}'s own
+ * {@code @Transactional} methods silently joined that already-committed,
+ * about-to-be-cleaned-up transaction instead of opening a real one - Spring
+ * treats a joined transaction's "commit" as a no-op, so
+ * {@code EngineeringReport}/{@code AuditLog} rows were persisted into a
+ * transaction that never actually committed them, with no exception anywhere.
+ * {@code @Async} switches to a fresh thread with no stale resource bound,
+ * guaranteeing a genuinely new, committing transaction.
  * <p>
  * <b>Every exception from ReportPublicationService is caught here, not
- * propagated.</b> This is not optional hygiene: {@code @TransactionalEventListener(phase = AFTER_COMMIT)}
- * registers as a Spring {@code TransactionSynchronization.afterCommit()}
- * callback, and Spring's transaction manager deliberately propagates
- * exceptions thrown from {@code afterCommit()} back to the caller of the
- * original {@code @Transactional} method (unlike {@code afterCompletion()},
- * which it always swallows-and-logs). Left uncaught, a bug in report
- * publication would surface inside AnalysisExecutionService.execute()'s or
- * AIReviewExecutionService.execute()'s own try/catch and could flip an
- * already-COMPLETED AnalysisRun to FAILED, or write a spurious second
- * AIReviewRun row - exactly the cross-contamination ADR-047 forbids. Catching
- * here is what actually enforces "a report-generation failure must never
- * affect anything that already committed" at the framework level.
+ * propagated.</b> An {@code @Async} method has no synchronous caller to
+ * propagate to, but catching explicitly still gives a clearer, more specific
+ * log message than {@link com.gatekeeper.config.AsyncConfig}'s generic
+ * uncaught-exception handler would - and keeps a report-generation failure
+ * from ever being able to affect the AnalysisRun/Verdict/AIReviewRun that
+ * already committed (ADR-047), which by the time this runs, are unaffected
+ * either way.
  */
 @Slf4j
 @Service
@@ -43,6 +46,7 @@ public class ReportGenerationListener {
 
     private final ReportPublicationService reportPublicationService;
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onVerdictProduced(VerdictProducedEvent event) {
         try {
@@ -54,6 +58,7 @@ public class ReportGenerationListener {
         }
     }
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAiReviewFinished(AIReviewFinishedEvent event) {
         try {

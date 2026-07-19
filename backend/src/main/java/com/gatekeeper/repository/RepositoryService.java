@@ -4,6 +4,7 @@ import com.gatekeeper.exception.ConflictException;
 import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.github.GitHubInstallation;
 import com.gatekeeper.github.GitHubInstallationRepository;
+import com.gatekeeper.github.dto.InstallationRepositoriesResponse;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload.RepositoryReference;
 import com.gatekeeper.organization.OrganizationService;
@@ -87,28 +88,55 @@ public class RepositoryService {
         }
 
         for (RepositoryReference added : orEmpty(payload.repositoriesAdded())) {
-            link(installation, added, deliveryId);
+            link(installation, added.id(), added.name(), added.fullName(), deliveryId);
         }
         for (RepositoryReference removed : orEmpty(payload.repositoriesRemoved())) {
             unlink(removed, deliveryId);
         }
     }
 
-    private void link(GitHubInstallation installation, RepositoryReference added, String deliveryId) {
-        Repository repository = repositoryRepository.findByGithubRepositoryId(added.id())
+    /**
+     * Synchronizes an installation's full repository list from GitHub's own
+     * GET /installation/repositories response (see GitHubRepositorySyncService,
+     * which calls this after every "installation" webhook) - the authoritative
+     * catch-up for repositories the installation_repositories webhook alone
+     * cannot be relied on to have delivered, particularly the initial set at
+     * install time. Reuses the exact same link() logic the
+     * installation_repositories webhook path uses, so a repository ends up in
+     * the same state regardless of which of the two paths reported it.
+     */
+    @Transactional
+    public void synchronizeFromInstallation(
+            Long installationId, List<InstallationRepositoriesResponse.RepositorySummary> repositories) {
+        GitHubInstallation installation = gitHubInstallationRepository.findByInstallationId(installationId)
+                .orElse(null);
+        if (installation == null) {
+            log.info("Skipping repository synchronization for unknown installation {}.", installationId);
+            return;
+        }
+
+        for (InstallationRepositoriesResponse.RepositorySummary repository : repositories) {
+            link(installation, repository.id(), repository.name(), repository.fullName(), "installation-sync");
+        }
+        log.info("Synchronized {} repository(ies) for installation {}.", repositories.size(), installationId);
+    }
+
+    private void link(GitHubInstallation installation, Long githubRepositoryId, String name, String fullName,
+            String deliveryId) {
+        Repository repository = repositoryRepository.findByGithubRepositoryId(githubRepositoryId)
                 .orElseGet(() -> Repository.builder()
                         .organization(organizationService.getDefaultOrganization())
-                        .githubRepositoryId(added.id())
+                        .githubRepositoryId(githubRepositoryId)
                         .build());
 
-        repository.setName(added.name());
-        repository.setFullName(added.fullName());
-        repository.setOwner(ownerFrom(added.fullName()));
+        repository.setName(name);
+        repository.setFullName(fullName);
+        repository.setOwner(ownerFrom(fullName));
         repository.setGithubInstallation(installation);
         repository.setActive(true);
         repositoryRepository.save(repository);
         log.info("Repository '{}' linked to installation {} (delivery {}).",
-                added.fullName(), installation.getInstallationId(), deliveryId);
+                fullName, installation.getInstallationId(), deliveryId);
     }
 
     private void unlink(RepositoryReference removed, String deliveryId) {

@@ -7,6 +7,7 @@ import com.gatekeeper.organization.OrganizationService;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,9 +18,14 @@ import org.springframework.transaction.annotation.Transactional;
  * on every action (not a diff), so every action other than "deleted" is
  * handled identically as an upsert - "new_permissions_accepted" naturally
  * refreshes the permissions column this same way, with no special case
- * needed. Repository-level onboarding (the installation_repositories event
- * family - which repositories an installation can see) is a later milestone;
- * this class only tracks the installation itself.
+ * needed.
+ * <p>
+ * Every successful upsert also publishes InstallationRepositorySyncRequestedEvent
+ * (not on deactivate - nothing to synchronize on uninstall). This class only
+ * ever learns an installation's own identity from the webhook payload; which
+ * repositories that installation can see is a separate question the webhook
+ * payload cannot reliably answer (see GitHubRepositorySyncService), so it is
+ * delegated via this event rather than answered here.
  */
 @Slf4j
 @Service
@@ -31,6 +37,7 @@ public class GitHubInstallationService {
     private final GitHubInstallationRepository gitHubInstallationRepository;
     private final OrganizationService organizationService;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void handleInstallationEvent(InstallationWebhookPayload payload, String deliveryId) {
@@ -64,6 +71,8 @@ public class GitHubInstallationService {
         gitHubInstallationRepository.save(installation);
         log.info("Installation {} upserted for account '{}' (delivery {}, action '{}').",
                 installation.getInstallationId(), account.login(), deliveryId, payload.action());
+
+        eventPublisher.publishEvent(new InstallationRepositorySyncRequestedEvent(installation.getInstallationId()));
     }
 
     private void deactivate(Long installationId, String deliveryId) {

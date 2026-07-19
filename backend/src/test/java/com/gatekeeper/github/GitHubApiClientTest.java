@@ -13,6 +13,7 @@ import com.gatekeeper.github.dto.CheckRunResponse;
 import com.gatekeeper.github.dto.CreateCheckRunRequest;
 import com.gatekeeper.github.dto.GitHubFileChange;
 import com.gatekeeper.github.dto.InstallationAccessTokenResponse;
+import com.gatekeeper.github.dto.InstallationRepositoriesResponse.RepositorySummary;
 import com.gatekeeper.github.dto.UpdateCheckRunRequest;
 import com.gatekeeper.github.exception.GitHubApiException;
 import com.gatekeeper.github.exception.GitHubTransientApiException;
@@ -233,6 +234,69 @@ class GitHubApiClientTest {
         assertThatThrownBy(() -> client.updateCheckRun("gatekeeper/core", 555666L, request, "installation-token"))
                 .isInstanceOf(GitHubApiException.class)
                 .hasMessageContaining("404");
+    }
+
+    @Test
+    void listInstallationRepositories_parsesEveryRepositoryOnASinglePage() {
+        mockServer.expect(requestTo(BASE_URL + "/installation/repositories?per_page=100&page=1"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer installation-token"))
+                .andRespond(withSuccess(
+                        "{\"total_count\":1,\"repositories\":[{\"id\":1299531781,\"name\":\"gatekeeper-core\","
+                                + "\"full_name\":\"arcinth/gatekeeper-core\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        List<RepositorySummary> repositories = client.listInstallationRepositories("installation-token");
+
+        assertThat(repositories).hasSize(1);
+        assertThat(repositories.get(0).id()).isEqualTo(1299531781L);
+        assertThat(repositories.get(0).fullName()).isEqualTo("arcinth/gatekeeper-core");
+    }
+
+    @Test
+    void listInstallationRepositories_paginatesUntilAPageIsNotFull() {
+        mockServer.expect(requestTo(BASE_URL + "/installation/repositories?per_page=100&page=1"))
+                .andRespond(withSuccess(fullPageOfRepositoriesJson(100), MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(BASE_URL + "/installation/repositories?per_page=100&page=2"))
+                .andRespond(withSuccess(
+                        "{\"total_count\":101,\"repositories\":[{\"id\":999,\"name\":\"last\",\"full_name\":\"org/last\"}]}",
+                        MediaType.APPLICATION_JSON));
+
+        List<RepositorySummary> repositories = client.listInstallationRepositories("installation-token");
+
+        assertThat(repositories).hasSize(101);
+        assertThat(repositories.get(100).name()).isEqualTo("last");
+    }
+
+    @Test
+    void listInstallationRepositories_wrapsA5xxResponseAsTransient() {
+        mockServer.expect(requestTo(BASE_URL + "/installation/repositories?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThatThrownBy(() -> client.listInstallationRepositories("installation-token"))
+                .isInstanceOf(GitHubTransientApiException.class);
+    }
+
+    @Test
+    void listInstallationRepositories_wrapsA401ResponseAsPermanentNotTransient() {
+        mockServer.expect(requestTo(BASE_URL + "/installation/repositories?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+        assertThatThrownBy(() -> client.listInstallationRepositories("installation-token"))
+                .isInstanceOf(GitHubApiException.class)
+                .isNotInstanceOf(GitHubTransientApiException.class);
+    }
+
+    private String fullPageOfRepositoriesJson(int count) {
+        StringBuilder json = new StringBuilder("{\"total_count\":").append(count).append(",\"repositories\":[");
+        for (int i = 0; i < count; i++) {
+            if (i > 0) {
+                json.append(",");
+            }
+            json.append("{\"id\":").append(i).append(",\"name\":\"repo").append(i)
+                    .append("\",\"full_name\":\"org/repo").append(i).append("\"}");
+        }
+        return json.append("]}").toString();
     }
 
     private String fullPageOfFilesJson(int count) {

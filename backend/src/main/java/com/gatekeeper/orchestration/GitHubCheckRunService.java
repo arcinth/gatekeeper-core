@@ -48,6 +48,11 @@ import org.springframework.transaction.annotation.Transactional;
  * AnalysisRunService, the same way ReportPublicationService injects
  * EngineeringReportRepository/AuditLogRepository directly instead of routing
  * through another service - AnalysisRunService itself is left untouched.
+ * <p>
+ * {@code publishForVerdict} being {@code @Transactional} only works correctly
+ * because its caller ({@link GitHubCheckRunPublisher#onVerdictProduced}) is
+ * {@code @Async} - see that method's Javadoc for why that is load-bearing,
+ * not incidental.
  */
 @Slf4j
 @Service

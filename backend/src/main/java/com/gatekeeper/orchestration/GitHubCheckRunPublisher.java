@@ -40,13 +40,8 @@ public class GitHubCheckRunPublisher {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onVerdictProduced(VerdictProducedEvent event) {
-        // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
-        log.info("DIAGNOSTIC: GitHubCheckRunPublisher.onVerdictProduced invoked for analysis run {}.",
-                event.analysisRunId());
         try {
             gitHubCheckRunService.publishForVerdict(event.analysisRunId());
-            // TEMPORARY DIAGNOSTIC - remove once the check-run publication gap is resolved.
-            log.info("DIAGNOSTIC: publishForVerdict returned normally for analysis run {}.", event.analysisRunId());
         } catch (RuntimeException ex) {
             log.error("GitHub check run publication failed for analysis run {} after its Verdict was produced; "
                             + "the analysis run and its Verdict are unaffected.",

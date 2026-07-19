@@ -71,7 +71,7 @@ class AnalysisExecutionServiceTest {
         inProgressRun = AnalysisRun.builder().pullRequest(pullRequest).build();
         ReflectionTestUtils.setField(inProgressRun, "id", ANALYSIS_RUN_ID);
 
-        policyContext = new PolicyContext(ANALYSIS_RUN_ID, "gatekeeper/core", List.of());
+        policyContext = new PolicyContext(ANALYSIS_RUN_ID, 1L, "gatekeeper/core", List.of());
         policyResult = new PolicyResult(ANALYSIS_RUN_ID, List.of(), 2, Instant.now());
         securityContext = new SecurityContext(ANALYSIS_RUN_ID, "gatekeeper/core", List.of());
         securityResult = new SecurityResult(ANALYSIS_RUN_ID, List.of(), 2, Instant.now());

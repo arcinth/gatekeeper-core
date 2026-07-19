@@ -31,14 +31,14 @@ public class PolicyContextFactory {
     private static final String FILE_HEADER_PREFIX = "+++";
 
     public PolicyContext build(AnalysisRun analysisRun, List<GitHubFileChange> changedFiles) {
-        String repositoryFullName = analysisRun.getPullRequest().getRepository().getFullName();
+        var repository = analysisRun.getPullRequest().getRepository();
 
         List<PolicyContext.ChangedFile> files = changedFiles.stream()
                 .map(this::toChangedFile)
                 .flatMap(Optional::stream)
                 .toList();
 
-        return new PolicyContext(analysisRun.getId(), repositoryFullName, files);
+        return new PolicyContext(analysisRun.getId(), repository.getOrganization().getId(), repository.getFullName(), files);
     }
 
     private Optional<PolicyContext.ChangedFile> toChangedFile(GitHubFileChange file) {

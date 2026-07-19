@@ -13,6 +13,7 @@ import { VerdictsPage } from '../pages/VerdictsPage'
 import { VerdictDetailPage } from '../pages/VerdictDetailPage'
 import { RepositoryGovernancePage } from '../pages/RepositoryGovernancePage'
 import { RepositoriesPage } from '../pages/RepositoriesPage'
+import { PolicyManagementPage } from '../pages/PolicyManagementPage'
 import { UsersPage } from '../pages/UsersPage'
 import { ProtectedRoute } from './ProtectedRoute'
 
@@ -129,6 +130,14 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <RepositoryGovernancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/policies"
+        element={
+          <ProtectedRoute>
+            <PolicyManagementPage />
           </ProtectedRoute>
         }
       />

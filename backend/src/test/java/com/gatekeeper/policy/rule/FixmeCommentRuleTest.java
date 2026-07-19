@@ -58,6 +58,6 @@ class FixmeCommentRuleTest {
     }
 
     private PolicyContext contextWith(String path, String content) {
-        return new PolicyContext(1L, "org/repo", List.of(new PolicyContext.ChangedFile(path, content)));
+        return new PolicyContext(1L, 1L, "org/repo", List.of(new PolicyContext.ChangedFile(path, content)));
     }
 }

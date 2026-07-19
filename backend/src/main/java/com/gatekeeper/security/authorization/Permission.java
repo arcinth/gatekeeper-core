@@ -21,6 +21,9 @@ public enum Permission {
     /** Connect, update, or remove a repository. */
     REPOSITORY_MANAGE,
 
+    /** Enable/disable a policy rule or override its severity for the organization (Milestone 6). */
+    POLICY_MANAGE,
+
     /** Create, update, or remove users. */
     USER_MANAGE,
 

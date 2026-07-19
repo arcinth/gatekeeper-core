@@ -59,6 +59,7 @@ A small, fixed set of capabilities — one per *distinct action* the platform ex
 | `WORKSPACE_READ` | View Pull Requests, analysis runs, policy/security/AI findings, verdicts, engineering reports, the dashboard, repositories, and repository governance |
 | `REVIEW_DECISION_CREATE` | Submit an APPROVE/REJECT review decision against an analysis run |
 | `REPOSITORY_MANAGE` | Connect, update, or remove a repository |
+| `POLICY_MANAGE` | Enable/disable a policy rule or override its severity for the organization (Milestone 6) |
 | `USER_MANAGE` | Create, update, or remove users |
 | `ROLE_MANAGE` | Create, update, or remove roles |
 
@@ -68,15 +69,15 @@ A small, fixed set of capabilities — one per *distinct action* the platform ex
 
 The single source of truth for this table is `RolePermissions.java`; `RolePermissionsTest.java` pins it exhaustively. If they ever disagree, the code is authoritative and this table is stale and must be corrected.
 
-| Role | WORKSPACE_READ | REVIEW_DECISION_CREATE | REPOSITORY_MANAGE | USER_MANAGE | ROLE_MANAGE |
-|---|:---:|:---:|:---:|:---:|:---:|
-| ADMINISTRATOR | ✔ | ✔ | ✔ | ✔ | ✔ |
-| PLATFORM_ENGINEER | ✔ | ✔ | ✔ | | |
-| DEVSECOPS_ENGINEER | ✔ | ✔ | | | |
-| TECHNICAL_LEAD | ✔ | ✔ | | | |
-| ENGINEERING_MANAGER | ✔ | ✔ | | | |
-| DEVELOPER | ✔ | | | | |
-| *(any other role name)* | | | | | |
+| Role | WORKSPACE_READ | REVIEW_DECISION_CREATE | REPOSITORY_MANAGE | POLICY_MANAGE | USER_MANAGE | ROLE_MANAGE |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| ADMINISTRATOR | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| PLATFORM_ENGINEER | ✔ | ✔ | ✔ | ✔ | | |
+| DEVSECOPS_ENGINEER | ✔ | ✔ | | | | |
+| TECHNICAL_LEAD | ✔ | ✔ | | | | |
+| ENGINEERING_MANAGER | ✔ | ✔ | | | | |
+| DEVELOPER | ✔ | | | | | |
+| *(any other role name)* | | | | | | |
 
 **Notable design choice:** a plain `DEVELOPER` can see everything (transparency is core to the product's value) but cannot submit a review decision. This closes the gap identified in the Product Readiness Review — previously, any authenticated user of any role could approve or reject a Pull Request.
 
@@ -105,7 +106,7 @@ This matters specifically because `Role` is a manageable entity: an administrato
 
 ---
 
-# Known Limitations (as of Milestone 5)
+# Known Limitations (as of Milestone 6)
 
 - **Static, in-code mapping.** `RolePermissions` is a compile-time table, not data in the database. A custom role created via `RoleController` gets no permissions until a developer updates the mapping in code. A future "permission assignment" capability (letting administrators configure a custom role's permissions through the API/UI) would extend this model without changing how any controller is annotated — controllers only ever reference `Permission`, never the mapping's storage mechanism.
 - **Frontend is not permission-aware yet.** The UI does not hide actions a user cannot perform; a `DEVELOPER` still sees the "Submit Decision" form and receives a 403 from the backend on submit. This is deliberately out of scope for Milestone 5 and is expected to be addressed in a following, focused milestone.

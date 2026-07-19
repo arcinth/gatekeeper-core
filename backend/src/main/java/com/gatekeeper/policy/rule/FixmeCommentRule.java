@@ -33,6 +33,16 @@ public final class FixmeCommentRule extends CommentMarkerRule {
     }
 
     @Override
+    public PolicyCategory defaultCategory() {
+        return PolicyCategory.CODE_QUALITY;
+    }
+
+    @Override
+    public PolicySeverity defaultSeverity() {
+        return PolicySeverity.MEDIUM;
+    }
+
+    @Override
     protected PolicyFinding buildFinding(String filePath, int lineNumber, String lineContent) {
         return new PolicyFinding(
                 RULE_ID,

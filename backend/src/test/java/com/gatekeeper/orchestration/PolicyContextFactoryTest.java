@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gatekeeper.analysisrun.AnalysisRun;
 import com.gatekeeper.github.dto.GitHubFileChange;
+import com.gatekeeper.organization.Organization;
 import com.gatekeeper.policy.PolicyContext;
 import com.gatekeeper.pullrequest.PullRequest;
 import com.gatekeeper.repository.Repository;
@@ -28,6 +29,7 @@ class PolicyContextFactoryTest {
         PolicyContext context = factory.build(run, List.of(new GitHubFileChange("src/Foo.java", "modified", 3, patch)));
 
         assertThat(context.analysisRunId()).isEqualTo(1L);
+        assertThat(context.organizationId()).isEqualTo(9L);
         assertThat(context.repositoryFullName()).isEqualTo("gatekeeper/core");
         assertThat(context.changedFiles()).hasSize(1);
         assertThat(context.changedFiles().get(0).path()).isEqualTo("src/Foo.java");
@@ -105,7 +107,9 @@ class PolicyContextFactoryTest {
     }
 
     private AnalysisRun analysisRun(Long id, String repositoryFullName) {
-        Repository repository = Repository.builder().fullName(repositoryFullName).build();
+        Organization organization = Organization.builder().name("Acme").build();
+        ReflectionTestUtils.setField(organization, "id", 9L);
+        Repository repository = Repository.builder().fullName(repositoryFullName).organization(organization).build();
         PullRequest pullRequest = PullRequest.builder().repository(repository).build();
         AnalysisRun run = AnalysisRun.builder().pullRequest(pullRequest).build();
         ReflectionTestUtils.setField(run, "id", id);

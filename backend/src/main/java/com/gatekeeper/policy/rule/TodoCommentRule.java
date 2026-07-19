@@ -32,6 +32,16 @@ public final class TodoCommentRule extends CommentMarkerRule {
     }
 
     @Override
+    public PolicyCategory defaultCategory() {
+        return PolicyCategory.MAINTAINABILITY;
+    }
+
+    @Override
+    public PolicySeverity defaultSeverity() {
+        return PolicySeverity.LOW;
+    }
+
+    @Override
     protected PolicyFinding buildFinding(String filePath, int lineNumber, String lineContent) {
         return new PolicyFinding(
                 RULE_ID,

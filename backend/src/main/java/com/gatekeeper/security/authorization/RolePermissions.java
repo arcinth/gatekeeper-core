@@ -26,12 +26,14 @@ public final class RolePermissions {
                     Permission.WORKSPACE_READ,
                     Permission.REVIEW_DECISION_CREATE,
                     Permission.REPOSITORY_MANAGE,
+                    Permission.POLICY_MANAGE,
                     Permission.USER_MANAGE,
                     Permission.ROLE_MANAGE),
             RoleName.PLATFORM_ENGINEER, Set.of(
                     Permission.WORKSPACE_READ,
                     Permission.REVIEW_DECISION_CREATE,
-                    Permission.REPOSITORY_MANAGE),
+                    Permission.REPOSITORY_MANAGE,
+                    Permission.POLICY_MANAGE),
             RoleName.DEVSECOPS_ENGINEER, Set.of(
                     Permission.WORKSPACE_READ,
                     Permission.REVIEW_DECISION_CREATE),

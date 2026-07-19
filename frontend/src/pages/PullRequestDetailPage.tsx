@@ -1,40 +1,24 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { ExternalLink } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { LoadingSpinner } from '../components/LoadingSpinner'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { buttonClasses } from '../components/ui/buttonClasses'
+import { Card } from '../components/ui/Card'
+import { ErrorState } from '../components/ui/ErrorState'
+import { EmptyTableRow, Table, TableBody, TableHead } from '../components/ui/Table'
+import {
+  ANALYSIS_RUN_STATUS_TONES,
+  PULL_REQUEST_STATUS_TONES,
+  REVIEW_DECISION_TONES,
+  VERDICT_OUTCOME_TONES,
+} from '../components/ui/badgeTones'
 import { pullRequestService } from '../services/pullRequestService'
 import { reviewDecisionService } from '../services/reviewDecisionService'
-import type { AnalysisRunStatus, PullRequestStatus } from '../types/analysisRun'
 import type { PullRequestAnalysisRunReference, PullRequestDetail } from '../types/pullRequest'
 import type { ReviewDecision, ReviewDecisionType } from '../types/reviewDecision'
-import type { VerdictOutcome } from '../types/verdict'
-
-// Same badge language as PullRequestsPage/AnalysisRunsPage/AnalysisRunDetailPage.
-const RUN_STATUS_STYLES: Record<AnalysisRunStatus, string> = {
-  RECEIVED: 'bg-slate-100 text-slate-700',
-  QUEUED: 'bg-slate-100 text-slate-700',
-  IN_PROGRESS: 'bg-amber-100 text-amber-800',
-  COMPLETED: 'bg-emerald-100 text-emerald-800',
-  FAILED: 'bg-red-100 text-red-800',
-}
-
-const VERDICT_STYLES: Record<VerdictOutcome, string> = {
-  APPROVED: 'bg-emerald-100 text-emerald-800',
-  BLOCKED: 'bg-red-100 text-red-800',
-}
-
-// Same green/red pairing as VERDICT_STYLES - a reviewer's APPROVED/REJECTED
-// call reads with the same visual language as the engine's own verdict.
-const DECISION_STYLES: Record<ReviewDecisionType, string> = {
-  APPROVED: 'bg-emerald-100 text-emerald-800',
-  REJECTED: 'bg-red-100 text-red-800',
-}
-
-const PR_STATUS_STYLES: Record<PullRequestStatus, string> = {
-  OPEN: 'bg-emerald-100 text-emerald-800',
-  CLOSED: 'bg-slate-100 text-slate-700',
-  MERGED: 'bg-violet-100 text-violet-700',
-}
 
 export function PullRequestDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -66,7 +50,7 @@ export function PullRequestDetailPage() {
   if (error) {
     return (
       <AppLayout>
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
+        <ErrorState message={error} />
       </AppLayout>
     )
   }
@@ -80,27 +64,30 @@ export function PullRequestDetailPage() {
   }
 
   return (
-    <AppLayout>
-      <Link to="/pull-requests" className="mb-4 inline-block text-sm text-slate-500 hover:underline">
-        &larr; Back to Pull Requests
-      </Link>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-slate-900">
+    <AppLayout
+      title={
+        <>
           {pullRequest.repository.fullName} #{pullRequest.number}
-        </h1>
+        </>
+      }
+      description={pullRequest.title}
+      breadcrumbs={[
+        { label: 'Pull Requests', to: '/pull-requests' },
+        { label: `#${pullRequest.number} ${pullRequest.title}` },
+      ]}
+      actions={
         <a
           href={pullRequest.githubUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          className={buttonClasses('secondary', 'md')}
         >
-          View on GitHub &rarr;
+          View on GitHub <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
         </a>
-      </div>
-      <p className="mb-4 text-lg text-slate-800">{pullRequest.title}</p>
-
-      <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm md:grid-cols-4">
-        <Field label="Status" value={<StatusBadge status={pullRequest.status} />} />
+      }
+    >
+      <Card className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Field label="Status" value={<Badge tone={PULL_REQUEST_STATUS_TONES[pullRequest.status]}>{pullRequest.status}</Badge>} />
         <Field label="Author" value={pullRequest.authorLogin} />
         <Field label="Source branch" value={pullRequest.sourceBranch} />
         <Field label="Target branch" value={pullRequest.targetBranch} />
@@ -108,7 +95,7 @@ export function PullRequestDetailPage() {
         <Field label="Repository name" value={pullRequest.repository.name} />
         <Field label="Created" value={new Date(pullRequest.createdAt).toLocaleString()} />
         <Field label="Updated" value={new Date(pullRequest.updatedAt).toLocaleString()} />
-      </div>
+      </Card>
 
       <ReviewSection latestRun={pullRequest.analysisRuns[0]} />
 
@@ -120,56 +107,46 @@ export function PullRequestDetailPage() {
 
 function AnalysisRunHistoryTable({ analysisRuns }: { analysisRuns: PullRequestAnalysisRunReference[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-          <tr>
-            <th className="px-4 py-2">Commit</th>
-            <th className="px-4 py-2">Trigger</th>
-            <th className="px-4 py-2">Status</th>
-            <th className="px-4 py-2">Verdict</th>
-            <th className="px-4 py-2">Created</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {analysisRuns.length ? (
-            analysisRuns.map((run) => (
-              <tr key={run.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2">
-                  <Link to={`/analysis-runs/${run.id}`} className="text-slate-900 hover:underline">
-                    {run.commitSha.slice(0, 7)}
-                  </Link>
-                </td>
-                <td className="px-4 py-2 text-slate-700">{run.triggerReason}</td>
-                <td className="px-4 py-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${RUN_STATUS_STYLES[run.status]}`}>
-                    {run.status}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  {run.verdictOutcome ? (
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-bold ${VERDICT_STYLES[run.verdictOutcome]}`}
-                    >
-                      {run.verdictOutcome}
-                    </span>
-                  ) : (
-                    <span className="text-slate-400">&mdash;</span>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-slate-500">{new Date(run.createdAt).toLocaleString()}</td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
-                No analysis runs yet for this pull request.
+    <Table>
+      <TableHead>
+        <tr>
+          <th className="px-4 py-2">Commit</th>
+          <th className="px-4 py-2">Trigger</th>
+          <th className="px-4 py-2">Status</th>
+          <th className="px-4 py-2">Verdict</th>
+          <th className="px-4 py-2">Created</th>
+        </tr>
+      </TableHead>
+      <TableBody>
+        {analysisRuns.length ? (
+          analysisRuns.map((run) => (
+            <tr key={run.id} className="hover:bg-slate-50">
+              <td className="px-4 py-2">
+                <Link to={`/analysis-runs/${run.id}`} className="text-slate-900 hover:underline">
+                  {run.commitSha.slice(0, 7)}
+                </Link>
               </td>
+              <td className="px-4 py-2 text-slate-700">{run.triggerReason}</td>
+              <td className="px-4 py-2">
+                <Badge tone={ANALYSIS_RUN_STATUS_TONES[run.status]}>{run.status}</Badge>
+              </td>
+              <td className="px-4 py-2">
+                {run.verdictOutcome ? (
+                  <Badge tone={VERDICT_OUTCOME_TONES[run.verdictOutcome]} bold>
+                    {run.verdictOutcome}
+                  </Badge>
+                ) : (
+                  <span className="text-slate-400">&mdash;</span>
+                )}
+              </td>
+              <td className="px-4 py-2 text-slate-500">{new Date(run.createdAt).toLocaleString()}</td>
             </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+          ))
+        ) : (
+          <EmptyTableRow colSpan={5}>No analysis runs yet for this pull request.</EmptyTableRow>
+        )}
+      </TableBody>
+    </Table>
   )
 }
 
@@ -226,7 +203,7 @@ function ReviewSection({ latestRun }: { latestRun: PullRequestAnalysisRunReferen
   }
 
   return (
-    <div className="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+    <Card className="mb-6">
       <h2 className="mb-4 text-lg font-semibold text-slate-900">Review</h2>
 
       {!latestRun ? (
@@ -256,31 +233,25 @@ function ReviewSection({ latestRun }: { latestRun: PullRequestAnalysisRunReferen
                 className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
               />
             </div>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-md border border-slate-800 bg-slate-800 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-            >
+            <Button type="submit" variant="primary" disabled={isSubmitting}>
               {isSubmitting ? 'Submitting...' : 'Submit Decision'}
-            </button>
+            </Button>
           </form>
 
-          {submitError && (
-            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{submitError}</div>
-          )}
+          {submitError && <ErrorState message={submitError} />}
 
           {isLoadingHistory ? (
             <LoadingSpinner />
           ) : historyError ? (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{historyError}</div>
+            <ErrorState message={historyError} />
           ) : history.length ? (
             <ul className="divide-y divide-slate-100">
               {history.map((entry) => (
                 <li key={entry.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${DECISION_STYLES[entry.decision]}`}>
+                    <Badge tone={REVIEW_DECISION_TONES[entry.decision]} bold>
                       {entry.decision}
-                    </span>
+                    </Badge>
                     <span className="text-sm font-medium text-slate-900">{entry.reviewerName}</span>
                     <span className="text-xs text-slate-400">{new Date(entry.createdAt).toLocaleString()}</span>
                   </div>
@@ -293,12 +264,8 @@ function ReviewSection({ latestRun }: { latestRun: PullRequestAnalysisRunReferen
           )}
         </>
       )}
-    </div>
+    </Card>
   )
-}
-
-function StatusBadge({ status }: { status: PullRequestStatus }) {
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PR_STATUS_STYLES[status]}`}>{status}</span>
 }
 
 function Field({ label, value }: { label: string; value: ReactNode }) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { LoadingSpinner } from '../components/LoadingSpinner'
+import { Badge } from '../components/ui/Badge'
 import { dashboardService } from '../services/dashboardService'
 import type { DashboardOverview } from '../types/dashboard'
 
@@ -17,61 +17,7 @@ export function DashboardPage() {
   }, [])
 
   return (
-    <AppLayout>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
-        <div className="flex gap-2">
-          <Link
-            to="/pull-requests"
-            className="rounded-md border border-slate-800 bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
-          >
-            View Pull Requests
-          </Link>
-          <Link
-            to="/repositories"
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            View Repositories
-          </Link>
-          <Link
-            to="/analysis-runs"
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            View Analysis Runs
-          </Link>
-          <Link
-            to="/policy-findings"
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            View Policy Findings
-          </Link>
-          <Link
-            to="/security-findings"
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            View Security Findings
-          </Link>
-          <Link
-            to="/ai-review-runs"
-            className="rounded-md border border-violet-300 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50"
-          >
-            View AI Review Runs
-          </Link>
-          <Link
-            to="/verdicts"
-            className="rounded-md border border-slate-800 bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
-          >
-            View Verdicts
-          </Link>
-          <Link
-            to="/users"
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            Manage Users
-          </Link>
-        </div>
-      </div>
-
+    <AppLayout title="Dashboard">
       {isLoading ? (
         <LoadingSpinner />
       ) : (
@@ -84,9 +30,9 @@ export function DashboardPage() {
           */}
           <div className="mb-3 flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-900">Governance</h2>
-            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white">
+            <Badge tone="bg-slate-800 text-white" uppercase>
               Verdicts
-            </span>
+            </Badge>
           </div>
           <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
             <StatCard label={`Verdicts (${overview?.windowDays ?? 30}d)`} value={overview?.totalVerdicts ?? 0} />
@@ -150,9 +96,9 @@ export function DashboardPage() {
 
           <div className="mb-3 mt-8 flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-900">AI Review</h2>
-            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700">
+            <Badge tone="bg-violet-100 text-violet-700" uppercase>
               Advisory &middot; AI Generated
-            </span>
+            </Badge>
           </div>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <StatCard
@@ -228,9 +174,9 @@ function StatCard({
             : 'border-slate-200'
 
   return (
-    <div className={`rounded-lg border ${borderClassName} bg-white p-6 shadow-sm`}>
+    <div className={`rounded-lg border ${borderClassName} bg-white p-6 shadow-sm transition-shadow hover:shadow-md`}>
       <p className="text-sm text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold ${valueClassName}`}>
+      <p className={`mt-1 text-2xl font-semibold tabular-nums ${valueClassName}`}>
         {value}
         {suffix}
       </p>

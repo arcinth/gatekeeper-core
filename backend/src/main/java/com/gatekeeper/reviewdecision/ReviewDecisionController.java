@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,17 +26,26 @@ import org.springframework.web.bind.annotation.RestController;
  * Decision Workflow) - the same nested-sub-resource shape ReportController
  * already establishes for this prefix. AnalysisRunController itself is
  * untouched.
+ * <p>
+ * {@code create} needs more than the class-level read permission every other
+ * method here gets, so it declares its own {@code @PreAuthorize} - Spring
+ * Security method security uses the most specific (method-level) annotation
+ * in place of the class-level one, not in addition to it, so this
+ * deliberately replaces WORKSPACE_READ for this one method rather than
+ * requiring both (Milestone 5: RBAC Enforcement).
  */
 @RestController
 @RequestMapping("/api/v1/analysis-runs")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
+@PreAuthorize("hasAuthority('WORKSPACE_READ')")
 public class ReviewDecisionController {
 
     private final ReviewDecisionService reviewDecisionService;
 
     @PostMapping("/{id}/review-decisions")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('REVIEW_DECISION_CREATE')")
     public ApiResponse<ReviewDecisionResponse> create(
             @PathVariable Long id,
             @Valid @RequestBody CreateReviewDecisionRequest request,

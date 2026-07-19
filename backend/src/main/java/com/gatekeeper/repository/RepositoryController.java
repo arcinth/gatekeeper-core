@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/repositories")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
+@PreAuthorize("hasAuthority('WORKSPACE_READ')")
 public class RepositoryController {
 
     private final RepositoryService repositoryService;
@@ -43,20 +44,20 @@ public class RepositoryController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMINISTRATOR', 'ROLE_PLATFORM_ENGINEER')")
+    @PreAuthorize("hasAuthority('REPOSITORY_MANAGE')")
     public ApiResponse<RepositoryResponse> create(@Valid @RequestBody CreateRepositoryRequest request) {
         return ApiResponse.ok("Repository created successfully.", RepositoryResponse.from(repositoryService.create(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMINISTRATOR', 'ROLE_PLATFORM_ENGINEER')")
+    @PreAuthorize("hasAuthority('REPOSITORY_MANAGE')")
     public ApiResponse<RepositoryResponse> update(@PathVariable Long id, @Valid @RequestBody UpdateRepositoryRequest request) {
         return ApiResponse.ok("Repository updated successfully.", RepositoryResponse.from(repositoryService.update(id, request)));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMINISTRATOR', 'ROLE_PLATFORM_ENGINEER')")
+    @PreAuthorize("hasAuthority('REPOSITORY_MANAGE')")
     public void delete(@PathVariable Long id) {
         repositoryService.delete(id);
     }

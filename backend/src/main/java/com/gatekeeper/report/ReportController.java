@@ -4,6 +4,7 @@ import com.gatekeeper.common.ApiResponse;
 import com.gatekeeper.report.dto.ReportDetailResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/analysis-runs")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
+@PreAuthorize("hasAuthority('WORKSPACE_READ')")
 public class ReportController {
 
     private final ReportQueryService reportQueryService;

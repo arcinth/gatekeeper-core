@@ -57,8 +57,21 @@ class ReviewDecisionControllerTest {
     }
 
     @Test
+    void create_returns403WhenTheCallerIsADeveloper() throws Exception {
+        // DEVELOPER has WORKSPACE_READ but not REVIEW_DECISION_CREATE (Milestone 5:
+        // RBAC Enforcement) - the exact gap the milestone exists to close.
+        authenticateAs("developer@example.com", 9L, "DEVELOPER");
+
+        mockMvc.perform(post("/api/v1/analysis-runs/1/review-decisions")
+                        .header("Authorization", "Bearer test-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"APPROVED\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void create_returns201AndTheRecordedDecisionWhenAuthenticated() throws Exception {
-        authenticateAs("reviewer@example.com", 9L);
+        authenticateAs("reviewer@example.com", 9L, "TECHNICAL_LEAD");
         ReviewDecisionResponse response =
                 new ReviewDecisionResponse(42L, 1L, ReviewDecisionType.APPROVED, "Looks good", 9L, "Reviewer Name", Instant.now());
         when(reviewDecisionService.create(eq(1L), eq(9L), org.mockito.ArgumentMatchers.any()))
@@ -76,7 +89,7 @@ class ReviewDecisionControllerTest {
 
     @Test
     void create_returns400ForAnInvalidDecisionValue() throws Exception {
-        authenticateAs("reviewer@example.com", 9L);
+        authenticateAs("reviewer@example.com", 9L, "TECHNICAL_LEAD");
 
         mockMvc.perform(post("/api/v1/analysis-runs/1/review-decisions")
                         .header("Authorization", "Bearer test-token")
@@ -88,7 +101,7 @@ class ReviewDecisionControllerTest {
 
     @Test
     void create_returns422WhenDecisionIsMissing() throws Exception {
-        authenticateAs("reviewer@example.com", 9L);
+        authenticateAs("reviewer@example.com", 9L, "TECHNICAL_LEAD");
 
         mockMvc.perform(post("/api/v1/analysis-runs/1/review-decisions")
                         .header("Authorization", "Bearer test-token")
@@ -100,7 +113,7 @@ class ReviewDecisionControllerTest {
 
     @Test
     void create_returns404WhenTheAnalysisRunDoesNotExist() throws Exception {
-        authenticateAs("reviewer@example.com", 9L);
+        authenticateAs("reviewer@example.com", 9L, "TECHNICAL_LEAD");
         when(reviewDecisionService.create(eq(404L), eq(9L), org.mockito.ArgumentMatchers.any()))
                 .thenThrow(new ResourceNotFoundException("AnalysisRun not found with id: 404"));
 
@@ -114,7 +127,10 @@ class ReviewDecisionControllerTest {
 
     @Test
     void findHistory_returnsTheDecisionHistoryWhenAuthenticated() throws Exception {
-        authenticateAs("reviewer@example.com", 9L);
+        // DEVELOPER deliberately used here: WORKSPACE_READ (unlike REVIEW_DECISION_CREATE)
+        // is granted to every role, so reading history must keep working for a role
+        // that cannot submit a decision.
+        authenticateAs("reviewer@example.com", 9L, "DEVELOPER");
         when(reviewDecisionService.findHistory(1L)).thenReturn(List.of(
                 new ReviewDecisionResponse(2L, 1L, ReviewDecisionType.APPROVED, null, 9L, "Reviewer Name", Instant.now()),
                 new ReviewDecisionResponse(1L, 1L, ReviewDecisionType.REJECTED, "Needs work", 9L, "Reviewer Name", Instant.now())));
@@ -127,7 +143,7 @@ class ReviewDecisionControllerTest {
 
     @Test
     void findHistory_returns404WhenTheAnalysisRunDoesNotExist() throws Exception {
-        authenticateAs("reviewer@example.com", 9L);
+        authenticateAs("reviewer@example.com", 9L, "DEVELOPER");
         when(reviewDecisionService.findHistory(404L))
                 .thenThrow(new ResourceNotFoundException("AnalysisRun not found with id: 404"));
 
@@ -143,7 +159,7 @@ class ReviewDecisionControllerTest {
      * actually be a SecurityUser - a plain User would throw a ClassCastException
      * when the argument resolver casts it.
      */
-    private void authenticateAs(String email, Long userId) {
+    private void authenticateAs(String email, Long userId, String roleName) {
         Claims claims = mock(Claims.class);
         when(claims.get(JwtService.CLAIM_TYPE, String.class)).thenReturn(JwtService.TOKEN_TYPE_ACCESS);
         when(claims.get(JwtService.CLAIM_EMAIL, String.class)).thenReturn(email);
@@ -154,7 +170,7 @@ class ReviewDecisionControllerTest {
                 .passwordHash("x")
                 .fullName("Reviewer Name")
                 .organization(Organization.builder().name("Acme").build())
-                .role(Role.builder().name("DEVELOPER").build())
+                .role(Role.builder().name(roleName).build())
                 .enabled(true)
                 .build();
         ReflectionTestUtils.setField(user, "id", userId);

@@ -74,6 +74,10 @@ gatekeeper:
     check-run:
       # Name shown in GitHub's Checks UI for the check GitHubCheckRunService publishes.
       name: ${GITHUB_CHECK_RUN_NAME:GateKeeper}
+      # Name for the separate check GitHubReviewDecisionCheckRunService publishes (Milestone 4) -
+      # deliberately distinct from the check above: analysis and human review are two independent
+      # sources of truth, and this name must never collide with it.
+      review-decision-name: ${GITHUB_REVIEW_CHECK_RUN_NAME:GateKeeper Review}
   analysis:
     # Bounds worst-case latency/memory for a single AnalysisRun against a
     # pathologically large PR (Milestone 4 Architecture, Section 1).

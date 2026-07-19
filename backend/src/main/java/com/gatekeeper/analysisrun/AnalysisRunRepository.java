@@ -1,6 +1,7 @@
 package com.gatekeeper.analysisrun;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -12,6 +13,19 @@ import org.springframework.data.repository.query.Param;
 public interface AnalysisRunRepository extends JpaRepository<AnalysisRun, Long>, JpaSpecificationExecutor<AnalysisRun> {
 
     Optional<AnalysisRun> findByPullRequestIdAndCommitSha(Long pullRequestId, String commitSha);
+
+    /** Full run history for one Pull Request's detail view, newest first. */
+    List<AnalysisRun> findByPullRequestIdOrderByCreatedAtDesc(Long pullRequestId);
+
+    /**
+     * Backs PullRequestService's "latest run per PR" list-view enrichment: one
+     * query returning every run for the given PR ids, ordered by PR id then by
+     * createdAt descending within each PR - the caller keeps only the first
+     * occurrence per PR id to get the most recent run, the same batched-query-
+     * plus-in-memory-reduction shape findSummaryPage's own enrichment already
+     * uses, rather than a native "latest per group" query.
+     */
+    List<AnalysisRun> findByPullRequestIdInOrderByPullRequestIdAscCreatedAtDesc(Collection<Long> pullRequestIds);
 
     /**
      * Eagerly loads the pullRequest -> repository -> githubInstallation chain

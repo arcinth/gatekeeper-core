@@ -22,6 +22,12 @@ export function DashboardPage() {
         <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
         <div className="flex gap-2">
           <Link
+            to="/pull-requests"
+            className="rounded-md border border-slate-800 bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+          >
+            View Pull Requests
+          </Link>
+          <Link
             to="/repositories"
             className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
           >

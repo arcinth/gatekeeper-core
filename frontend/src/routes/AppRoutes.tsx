@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoginPage } from '../pages/LoginPage'
 import { DashboardPage } from '../pages/DashboardPage'
+import { PullRequestsPage } from '../pages/PullRequestsPage'
+import { PullRequestDetailPage } from '../pages/PullRequestDetailPage'
 import { AnalysisRunsPage } from '../pages/AnalysisRunsPage'
 import { AnalysisRunDetailPage } from '../pages/AnalysisRunDetailPage'
 import { PolicyFindingsPage } from '../pages/PolicyFindingsPage'
@@ -23,6 +25,22 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pull-requests"
+        element={
+          <ProtectedRoute>
+            <PullRequestsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pull-requests/:id"
+        element={
+          <ProtectedRoute>
+            <PullRequestDetailPage />
           </ProtectedRoute>
         }
       />

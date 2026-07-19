@@ -171,6 +171,24 @@ client gets the full picture in one request.
 
 ---
 
+## Review Decision API
+
+Lets a human reviewer record an APPROVE/REJECT decision against an Analysis Run, and lists that run's full decision history (Milestone 2: Reviewer Decision Workflow).
+
+### Endpoints
+
+```
+POST /api/v1/analysis-runs/{id}/review-decisions
+
+GET  /api/v1/analysis-runs/{id}/review-decisions
+```
+
+`POST` accepts `{"decision": "APPROVED" | "REJECTED", "comment": "..."}` (comment optional, max 2000 characters), records it against the authenticated caller, and returns 201 with the created decision. `GET` returns the full history for that run, newest first.
+
+Write-once: a reviewer changing their mind creates a new decision rather than editing a previous one, so the complete history is always preserved. Recording a decision has no effect on the Analysis Run, Verdict, or Pull Request - it is purely additive, observed data. It also has no effect on the GitHub Check Run; write-back to GitHub based on a review decision is explicitly out of scope for this milestone. No role restriction exists on who may submit a decision, and no self-review restriction.
+
+---
+
 ## Analysis API
 
 Represents Analysis Runs.

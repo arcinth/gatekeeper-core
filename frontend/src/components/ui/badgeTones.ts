@@ -2,6 +2,7 @@ import type { AIReviewRunStatus } from '../../types/aiReviewRun'
 import type { AIReviewConfidence } from '../../types/aiReviewFinding'
 import type { AnalysisRunStatus, PullRequestStatus } from '../../types/analysisRun'
 import type { AuditEventType } from '../../types/auditLog'
+import type { GitHubInstallationStatus } from '../../types/githubInstallation'
 import type { PolicySeverity } from '../../types/policyFinding'
 import type { AiReviewStatus } from '../../types/report'
 import type { ReviewDecisionType } from '../../types/reviewDecision'
@@ -86,6 +87,19 @@ export const REVIEW_DECISION_TONES: Record<ReviewDecisionType, string> = {
 export const ACTIVE_STATE_TONES: Record<'active' | 'inactive', string> = {
   active: 'bg-emerald-100 text-emerald-800',
   inactive: 'bg-slate-100 text-slate-600',
+}
+
+// GitHub Connections status (Milestone 8: Repository Onboarding). ERROR reuses
+// the same red as REPOSITORY_REMOVED/USER_REMOVED in AUDIT_EVENT_TYPE_TONES -
+// both mean "needs attention now" - while SYNCING gets its own amber-in-motion
+// framing distinct from the "something changed" amber used for *_UPDATED
+// events, since a sync in progress isn't a problem, just not finished yet.
+export const GITHUB_INSTALLATION_STATUS_TONES: Record<GitHubInstallationStatus, string> = {
+  CONNECTING: 'bg-slate-100 text-slate-700',
+  SYNCING: 'bg-amber-100 text-amber-800',
+  ACTIVE: 'bg-emerald-100 text-emerald-800',
+  ERROR: 'bg-red-100 text-red-800',
+  DISCONNECTED: 'bg-slate-100 text-slate-600',
 }
 
 // Grouped by the dimension the event concerns, not by CRUD verb: governance

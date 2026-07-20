@@ -17,10 +17,11 @@ import lombok.Setter;
 
 /**
  * Represents a repository tracked by GateKeeper (docs/Database.md - Repository entity).
- * Sprint 1 introduced local CRUD only. Sprint 2 Milestone 2 adds the GitHub linkage
- * fields (nullable, since Sprint 1's manually-created repositories predate them and
- * repository onboarding via the installation webhook family isn't implemented yet -
- * only lookup of already-linked repositories is in scope this milestone).
+ * Every row originates from a GitHub App installation (Milestone 8: Repository
+ * Onboarding removed manual creation) - {@code githubRepositoryId}/
+ * {@code githubInstallation} are still nullable at the column level only
+ * because they predate that decision and existing rows must remain valid;
+ * every row RepositoryService now creates populates both.
  */
 @Getter
 @Setter

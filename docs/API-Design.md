@@ -113,12 +113,38 @@ Responsible for repository lifecycle.
 GET    /api/v1/repositories
 GET    /api/v1/repositories/{id}
 
-POST   /api/v1/repositories
-
 PUT    /api/v1/repositories/{id}
 
 DELETE /api/v1/repositories/{id}
 ```
+
+No `POST`: GitHub App installation is the only supported way a repository enters GateKeeper (Milestone 8: Repository Onboarding - see the GitHub Installations API below). A repository created any other way would have no `githubRepositoryId`/`githubInstallation` linkage and could never resolve a real `pull_request` webhook, so manual creation was removed rather than left as a dead end. `PUT`/`DELETE` remain - editing or disconnecting an already-linked repository is still meaningful.
+
+---
+
+## GitHub Installations API
+
+Visibility into GitHub App installations and the URL that starts GitHub's own "install this App" flow (Milestone 8: Repository Onboarding). This is the API surface behind the Repositories page's "GitHub Connections" section - see [GitHub-Integration-Architecture-Review.md](./GitHub-Integration-Architecture-Review.md) for how this fits into the wider GitHub integration.
+
+### Endpoints
+
+```
+GET  /api/v1/github/install-url
+
+GET  /api/v1/github/installations
+
+GET  /api/v1/github/installations/{id}
+
+POST /api/v1/github/installations/{id}/sync
+```
+
+`GET /api/v1/github/install-url` returns `{"url": "...", "appConfigured": true|false}`. The GitHub App's id and slug never leave the backend - only the fully-formed URL is exposed, or `appConfigured=false` (with `url: null`) when the App isn't configured, so the frontend can show "GitHub App not configured" instead of a broken link. Requires `REPOSITORY_MANAGE`.
+
+`GET /api/v1/github/installations` lists every known installation (including disconnected ones, so history isn't hidden), each with its lifecycle `status`, `lastSuccessfulSyncAt`, `lastSyncError`, and a denormalized `repositoryCount`. `GET .../installations/{id}` returns one. Both require only `WORKSPACE_READ` - installation visibility is informational, the same transparency posture already given to repositories themselves.
+
+`POST /api/v1/github/installations/{id}/sync` synchronously re-runs the same repository reconciliation (`GET /installation/repositories` &rarr; upsert) that already runs asynchronously after every `installation` webhook - used by the post-install callback page and a manual "Resync now" action, so a user doesn't have to wait on the async webhook round trip to see their repositories appear. Requires `REPOSITORY_MANAGE`.
+
+**Lifecycle status.** Each installation carries one of `CONNECTING` (row just created, no sync completed yet), `SYNCING` (a synchronization is in progress right now), `ACTIVE` (last synchronization succeeded), `ERROR` (last synchronization failed - `lastSyncError` holds why), or `DISCONNECTED` (GitHub reported the installation deleted). This is distinct from the existing `active` boolean, which only answers "does this installation still exist on GitHub" - `status` answers the finer-grained "is repository synchronization currently healthy," so a sync failure is visible in the UI instead of silently leaving repositories stale.
 
 ---
 

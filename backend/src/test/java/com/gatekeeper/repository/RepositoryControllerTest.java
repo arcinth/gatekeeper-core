@@ -5,7 +5,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,10 +31,13 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * Proves REPOSITORY_MANAGE gates repository writes (Milestone 5: RBAC
  * Enforcement) - business logic itself is covered by RepositoryServiceTest;
- * this class exists to prove the authorization layer, not to re-test create().
+ * this class exists to prove the authorization layer, not to re-test
+ * update(). No POST tests: manual repository creation was removed in
+ * Milestone 8 (Repository Onboarding) - GitHub App installation is the only
+ * supported way a repository enters GateKeeper.
  * <p>
  * Authenticates as a real {@link SecurityUser} (not a plain Spring
- * {@code User}) - RepositoryController's write methods now read
+ * {@code User}) - RepositoryController's write methods read
  * {@code principal.getId()} to attribute the audit trail (Milestone 7), and
  * a mismatched principal type resolves to null there, NPEing instead of
  * exercising the authorization behavior this class actually tests.
@@ -56,36 +59,36 @@ class RepositoryControllerTest {
     private CustomUserDetailsService customUserDetailsService;
 
     @Test
-    void create_returns401WithoutAJwt() throws Exception {
-        mockMvc.perform(post("/api/v1/repositories")
+    void update_returns401WithoutAJwt() throws Exception {
+        mockMvc.perform(put("/api/v1/repositories/1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"core\",\"fullName\":\"acme/core\"}"))
+                        .content("{\"name\":\"core\",\"active\":true}"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void create_returns403WhenTheCallerIsADeveloper() throws Exception {
+    void update_returns403WhenTheCallerIsADeveloper() throws Exception {
         authenticateAs("developer@example.com", "DEVELOPER");
 
-        mockMvc.perform(post("/api/v1/repositories")
+        mockMvc.perform(put("/api/v1/repositories/1")
                         .header("Authorization", "Bearer test-token")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"core\",\"fullName\":\"acme/core\"}"))
+                        .content("{\"name\":\"core\",\"active\":true}"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void create_returns201WhenTheCallerHasRepositoryManage() throws Exception {
+    void update_returns200WhenTheCallerHasRepositoryManage() throws Exception {
         authenticateAs("platform@example.com", "PLATFORM_ENGINEER");
         Repository repository = Repository.builder()
                 .name("core").fullName("acme/core").active(true).build();
-        when(repositoryService.create(any(), any())).thenReturn(repository);
+        when(repositoryService.update(eq(1L), any(), any())).thenReturn(repository);
 
-        mockMvc.perform(post("/api/v1/repositories")
+        mockMvc.perform(put("/api/v1/repositories/1")
                         .header("Authorization", "Bearer test-token")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"core\",\"fullName\":\"acme/core\"}"))
-                .andExpect(status().isCreated())
+                        .content("{\"name\":\"core\",\"active\":true}"))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("core"));
     }
 

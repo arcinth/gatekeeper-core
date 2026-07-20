@@ -3,7 +3,6 @@ package com.gatekeeper.repository;
 import com.gatekeeper.auditlog.AuditEvent;
 import com.gatekeeper.auditlog.AuditEventType;
 import com.gatekeeper.auditlog.AuditLogService;
-import com.gatekeeper.exception.ConflictException;
 import com.gatekeeper.exception.ResourceNotFoundException;
 import com.gatekeeper.github.GitHubInstallation;
 import com.gatekeeper.github.GitHubInstallationRepository;
@@ -11,7 +10,6 @@ import com.gatekeeper.github.dto.InstallationRepositoriesResponse;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload.RepositoryReference;
 import com.gatekeeper.organization.OrganizationService;
-import com.gatekeeper.repository.dto.CreateRepositoryRequest;
 import com.gatekeeper.repository.dto.UpdateRepositoryRequest;
 import java.util.List;
 import java.util.Map;
@@ -38,32 +36,6 @@ public class RepositoryService {
     public Repository findById(Long id) {
         return repositoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Repository not found with id: " + id));
-    }
-
-    @Transactional
-    public Repository create(CreateRepositoryRequest request, Long actorId) {
-        if (repositoryRepository.existsByFullNameIgnoreCase(request.fullName())) {
-            throw new ConflictException("A repository named '" + request.fullName() + "' already exists.");
-        }
-        Repository repository = Repository.builder()
-                .organization(organizationService.getDefaultOrganization())
-                .name(request.name())
-                .fullName(request.fullName())
-                .description(request.description())
-                .active(true)
-                .build();
-        Repository saved = repositoryRepository.save(repository);
-
-        auditLogService.record(AuditEvent.builder()
-                .eventType(AuditEventType.REPOSITORY_CONNECTED)
-                .organizationId(saved.getOrganization().getId())
-                .repositoryId(saved.getId())
-                .actorId(actorId)
-                .newValue(Map.of("name", saved.getName(), "fullName", saved.getFullName(), "active", true))
-                .summary("Repository '" + saved.getFullName() + "' connected.")
-                .build());
-
-        return saved;
     }
 
     @Transactional
@@ -167,20 +139,67 @@ public class RepositoryService {
         log.info("Synchronized {} repository(ies) for installation {}.", repositories.size(), installationId);
     }
 
+    /**
+     * The only path a repository is ever created in GateKeeper (Milestone 8:
+     * Repository Onboarding removed manual creation) - so this is also the
+     * only place REPOSITORY_CONNECTED is ever audited. Called on every
+     * installation_repositories webhook and every proactive
+     * synchronizeFromInstallation sync, so a routine resync of an
+     * already-correctly-linked repository must not spam the audit log:
+     * REPOSITORY_UPDATED is recorded only when something actually changed
+     * (a rename/transfer, or a reactivation from a previously inactive row).
+     */
     private void link(GitHubInstallation installation, Long githubRepositoryId, String name, String fullName,
             String deliveryId) {
-        Repository repository = repositoryRepository.findByGithubRepositoryId(githubRepositoryId)
-                .orElseGet(() -> Repository.builder()
+        Repository existing = repositoryRepository.findByGithubRepositoryId(githubRepositoryId).orElse(null);
+        boolean isNew = existing == null;
+
+        Repository repository = isNew
+                ? Repository.builder()
                         .organization(organizationService.getDefaultOrganization())
                         .githubRepositoryId(githubRepositoryId)
-                        .build());
+                        .build()
+                : existing;
+
+        boolean changed = !isNew && (!fullName.equals(repository.getFullName())
+                || !name.equals(repository.getName())
+                || !repository.isActive());
+        // Map.of rejects null values - repository.getName()/getFullName() can be null here
+        // only in the (pre-Milestone-8) legacy case of a row that predates this always
+        // populating both fields.
+        Map<String, Object> oldValue = changed
+                ? Map.of(
+                        "name", repository.getName() == null ? "" : repository.getName(),
+                        "fullName", repository.getFullName() == null ? "" : repository.getFullName(),
+                        "active", repository.isActive())
+                : null;
 
         repository.setName(name);
         repository.setFullName(fullName);
         repository.setOwner(ownerFrom(fullName));
         repository.setGithubInstallation(installation);
         repository.setActive(true);
-        repositoryRepository.save(repository);
+        Repository saved = repositoryRepository.save(repository);
+
+        if (isNew) {
+            auditLogService.record(AuditEvent.builder()
+                    .eventType(AuditEventType.REPOSITORY_CONNECTED)
+                    .organizationId(saved.getOrganization().getId())
+                    .repositoryId(saved.getId())
+                    .newValue(Map.of("name", name, "fullName", fullName, "active", true))
+                    .summary("Repository '" + fullName + "' connected via GitHub App installation.")
+                    .build());
+        } else if (changed) {
+            auditLogService.record(AuditEvent.builder()
+                    .eventType(AuditEventType.REPOSITORY_UPDATED)
+                    .organizationId(saved.getOrganization().getId())
+                    .repositoryId(saved.getId())
+                    .oldValue(oldValue)
+                    .newValue(Map.of("name", name, "fullName", fullName, "active", true))
+                    .summary("Repository '" + fullName + "' updated via GitHub synchronization.")
+                    .build());
+        }
+
         log.info("Repository '{}' linked to installation {} (delivery {}).",
                 fullName, installation.getInstallationId(), deliveryId);
     }
@@ -188,8 +207,19 @@ public class RepositoryService {
     private void unlink(RepositoryReference removed, String deliveryId) {
         repositoryRepository.findByGithubRepositoryId(removed.id()).ifPresentOrElse(
                 repository -> {
-                    repository.setActive(false);
-                    repositoryRepository.save(repository);
+                    if (repository.isActive()) {
+                        repository.setActive(false);
+                        Repository saved = repositoryRepository.save(repository);
+                        auditLogService.record(AuditEvent.builder()
+                                .eventType(AuditEventType.REPOSITORY_UPDATED)
+                                .organizationId(saved.getOrganization().getId())
+                                .repositoryId(saved.getId())
+                                .oldValue(Map.of("active", true))
+                                .newValue(Map.of("active", false))
+                                .summary("Repository '" + saved.getFullName()
+                                        + "' disconnected (removed from GitHub App installation).")
+                                .build());
+                    }
                     log.info("Repository '{}' marked inactive after installation_repositories removal (delivery {}).",
                             repository.getFullName(), deliveryId);
                 },

@@ -16,6 +16,7 @@ import com.gatekeeper.repository.Repository;
 import com.gatekeeper.repository.RepositoryRepository;
 import com.gatekeeper.user.User;
 import com.gatekeeper.user.UserRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -64,6 +65,7 @@ public class AuditLogService {
     private final AnalysisRunRepository analysisRunRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
     @Transactional
     public void record(AuditEvent event) {
@@ -100,6 +102,9 @@ public class AuditLogService {
                 .build();
 
         auditLogRepository.save(auditLog);
+        // Milestone 9: Observability. event_type is AuditEventType's fixed enum -
+        // bounded cardinality, never the repository/PR/user id also on this record.
+        meterRegistry.counter("gatekeeper.audit.events", "event_type", event.getEventType().name()).increment();
     }
 
     public Page<AuditLogSummaryResponse> search(Long organizationId, AuditLogFilter filter, Pageable pageable) {

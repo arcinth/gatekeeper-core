@@ -1,5 +1,7 @@
 package com.gatekeeper.aireviewengine;
 
+import com.gatekeeper.observability.ObservedOperation;
+import com.gatekeeper.observability.OperationCategory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,6 +43,7 @@ public class AIReviewEngine {
         this.provider = provider;
     }
 
+    @ObservedOperation(value = "review.evaluate", category = OperationCategory.REVIEW_ENGINE)
     public AIReviewResult evaluate(AIReviewContext context) {
         return provider.review(context);
     }

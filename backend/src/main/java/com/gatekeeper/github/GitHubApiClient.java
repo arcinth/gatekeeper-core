@@ -8,6 +8,8 @@ import com.gatekeeper.github.dto.InstallationRepositoriesResponse;
 import com.gatekeeper.github.dto.UpdateCheckRunRequest;
 import com.gatekeeper.github.exception.GitHubApiException;
 import com.gatekeeper.github.exception.GitHubTransientApiException;
+import com.gatekeeper.observability.ObservedOperation;
+import com.gatekeeper.observability.OperationCategory;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +46,7 @@ public class GitHubApiClient {
         this.maxChangedFilesPerPullRequest = maxChangedFilesPerPullRequest;
     }
 
+    @ObservedOperation(value = "github.mintInstallationAccessToken", category = OperationCategory.GITHUB_API)
     public InstallationAccessTokenResponse mintInstallationAccessToken(long installationId, String appJwt) {
         try {
             return restClient.post()
@@ -82,6 +85,7 @@ public class GitHubApiClient {
             backoff = @Backoff(
                     delayExpression = "${gatekeeper.github.api.retry.initial-backoff-ms:500}",
                     multiplierExpression = "${gatekeeper.github.api.retry.backoff-multiplier:2}"))
+    @ObservedOperation(value = "github.fetchPullRequestFiles", category = OperationCategory.GITHUB_API)
     public List<GitHubFileChange> fetchPullRequestFiles(
             String repositoryFullName, int pullRequestNumber, String installationAccessToken) {
         String[] ownerAndRepo = repositoryFullName.split("/", 2);
@@ -125,6 +129,7 @@ public class GitHubApiClient {
             backoff = @Backoff(
                     delayExpression = "${gatekeeper.github.api.retry.initial-backoff-ms:500}",
                     multiplierExpression = "${gatekeeper.github.api.retry.backoff-multiplier:2}"))
+    @ObservedOperation(value = "github.listInstallationRepositories", category = OperationCategory.GITHUB_API)
     public List<InstallationRepositoriesResponse.RepositorySummary> listInstallationRepositories(
             String installationAccessToken) {
         List<InstallationRepositoriesResponse.RepositorySummary> allRepositories = new ArrayList<>();
@@ -170,6 +175,7 @@ public class GitHubApiClient {
      * commit" lookup, so the id must be stored by whoever creates it (see
      * AnalysisRun.githubCheckRunId).
      */
+    @ObservedOperation(value = "github.createCheckRun", category = OperationCategory.GITHUB_API)
     public CheckRunResponse createCheckRun(
             String repositoryFullName, CreateCheckRunRequest request, String installationAccessToken) {
         String[] ownerAndRepo = splitOwnerAndRepoForCheckRuns(repositoryFullName);
@@ -195,6 +201,7 @@ public class GitHubApiClient {
     }
 
     /** Updates a previously created Check Run - GateKeeper only ever moves one forward, never deletes it. */
+    @ObservedOperation(value = "github.updateCheckRun", category = OperationCategory.GITHUB_API)
     public void updateCheckRun(
             String repositoryFullName, long checkRunId, UpdateCheckRunRequest request, String installationAccessToken) {
         String[] ownerAndRepo = splitOwnerAndRepoForCheckRuns(repositoryFullName);

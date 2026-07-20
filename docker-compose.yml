@@ -40,10 +40,20 @@ services:
       # ./secrets is mounted read-only below at /secrets, so this must be a
       # container-side path, not the host-side one used by ./mvnw spring-boot:run.
       GITHUB_APP_PRIVATE_KEY_PATH: ${GITHUB_APP_PRIVATE_KEY_PATH:-}
+      MANAGEMENT_SERVER_PORT: ${MANAGEMENT_SERVER_PORT:-8081}
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-local}
     volumes:
       - ./secrets:/secrets:ro
     ports:
       - "${SERVER_PORT:-8080}:8080"
+      # Actuator (health/info/metrics/prometheus/startup - Milestone 9: Observability).
+      # Published here purely for local development convenience (curl it directly from
+      # the host); a real production deployment must NOT publish this port on a public
+      # load balancer/ingress - it has no application-level authentication of its own,
+      # relying entirely on not being reachable from outside the private network, the
+      # same trust boundary Postgres's own port already relies on in this file. See
+      # docs/Observability.md.
+      - "${MANAGEMENT_SERVER_PORT:-8081}:8081"
 
   # frontend:
   #   Not containerized yet (Sprint 1 scope). Run locally with `npm run dev`

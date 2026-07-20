@@ -13,6 +13,7 @@ import com.gatekeeper.github.dto.InstallationAccessTokenResponse;
 import com.gatekeeper.github.exception.GitHubApiException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
@@ -34,13 +35,15 @@ class GitHubAppAuthServiceTest {
     private MutableClock clock;
     private KeyPair testKeyPair;
     private GitHubAppAuthService service;
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @BeforeEach
     void setUp() throws NoSuchAlgorithmException {
         testKeyPair = generateTestRsaKeyPair();
         gitHubApiClient = mock(GitHubApiClient.class);
         clock = new MutableClock(Instant.parse("2026-07-14T12:00:00Z"));
-        service = new GitHubAppAuthService(gitHubApiClient, clock, APP_ID, toPkcs8Pem(testKeyPair.getPrivate()), "");
+        service = new GitHubAppAuthService(
+                gitHubApiClient, clock, APP_ID, toPkcs8Pem(testKeyPair.getPrivate()), "", meterRegistry);
     }
 
     @Test
@@ -66,7 +69,8 @@ class GitHubAppAuthServiceTest {
 
     @Test
     void mintAppJwt_throwsActionableErrorWhenPrivateKeyIsBlank() {
-        GitHubAppAuthService withoutKey = new GitHubAppAuthService(gitHubApiClient, clock, APP_ID, "", "");
+        GitHubAppAuthService withoutKey =
+                new GitHubAppAuthService(gitHubApiClient, clock, APP_ID, "", "", meterRegistry);
 
         assertThatThrownBy(withoutKey::mintAppJwt)
                 .isInstanceOf(IllegalStateException.class)
@@ -76,7 +80,8 @@ class GitHubAppAuthServiceTest {
     @Test
     void mintAppJwt_throwsActionableErrorForPkcs1FormattedKey() {
         String pkcs1Pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAK...\n-----END RSA PRIVATE KEY-----";
-        GitHubAppAuthService withPkcs1Key = new GitHubAppAuthService(gitHubApiClient, clock, APP_ID, pkcs1Pem, "");
+        GitHubAppAuthService withPkcs1Key =
+                new GitHubAppAuthService(gitHubApiClient, clock, APP_ID, pkcs1Pem, "", meterRegistry);
 
         assertThatThrownBy(withPkcs1Key::mintAppJwt)
                 .isInstanceOf(IllegalStateException.class)
@@ -88,8 +93,8 @@ class GitHubAppAuthServiceTest {
         java.nio.file.Path keyFile = java.nio.file.Files.createTempFile("gatekeeper-test-key", ".pem");
         try {
             java.nio.file.Files.writeString(keyFile, toPkcs8Pem(testKeyPair.getPrivate()));
-            GitHubAppAuthService withKeyFromPath =
-                    new GitHubAppAuthService(gitHubApiClient, clock, APP_ID, "", keyFile.toString());
+            GitHubAppAuthService withKeyFromPath = new GitHubAppAuthService(
+                    gitHubApiClient, clock, APP_ID, "", keyFile.toString(), meterRegistry);
 
             String jwt = withKeyFromPath.mintAppJwt();
 
@@ -108,7 +113,7 @@ class GitHubAppAuthServiceTest {
     @Test
     void constructor_throwsActionableErrorWhenPrivateKeyPathDoesNotExist() {
         assertThatThrownBy(() -> new GitHubAppAuthService(
-                gitHubApiClient, clock, APP_ID, "", "/no/such/file/github-app-private-key.pem"))
+                gitHubApiClient, clock, APP_ID, "", "/no/such/file/github-app-private-key.pem", meterRegistry))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("GITHUB_APP_PRIVATE_KEY_PATH");
     }

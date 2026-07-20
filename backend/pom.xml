@@ -25,6 +25,8 @@
         <lombok.version>1.18.44</lombok.version>
         <testcontainers.version>1.20.3</testcontainers.version>
         <wiremock.version>3.9.2</wiremock.version>
+        <logstash-logback-encoder.version>7.4</logstash-logback-encoder.version>
+        <git-commit-id-plugin.version>7.0.0</git-commit-id-plugin.version>
     </properties>
 
     <dependencies>
@@ -35,6 +37,19 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>${logstash-logback-encoder.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -141,6 +156,40 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+                <executions>
+                    <!-- Generates META-INF/build-info.properties (version, build time), consumed
+                         automatically by Actuator's /actuator/info (Milestone 9: Observability). -->
+                    <execution>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- Generates git.properties (commit hash, branch), also consumed automatically
+                     by /actuator/info. failOnNoGitDirectory=false so a source build without a
+                     .git directory (e.g. from a tarball) degrades gracefully rather than failing
+                     the whole build over missing version metadata. -->
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+                <version>${git-commit-id-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>revision</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <generateGitPropertiesFile>true</generateGitPropertiesFile>
+                    <includeOnlyProperties>
+                        <includeOnlyProperty>^git.commit.id\.(abbrev|full)$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.branch$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
+                    </includeOnlyProperties>
                 </configuration>
             </plugin>
         </plugins>

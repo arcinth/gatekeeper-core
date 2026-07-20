@@ -15,6 +15,7 @@ import com.gatekeeper.github.dto.PullRequestWebhookPayload;
 import com.gatekeeper.github.exception.MalformedWebhookPayloadException;
 import com.gatekeeper.orchestration.AnalysisOrchestrator;
 import com.gatekeeper.repository.RepositoryService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +27,8 @@ class GitHubEventRouterTest {
     private final GitHubInstallationService gitHubInstallationService = mock(GitHubInstallationService.class);
     private final RepositoryService repositoryService = mock(RepositoryService.class);
     private final GitHubEventRouter router = new GitHubEventRouter(
-            analysisOrchestrator, gitHubInstallationService, repositoryService, new ObjectMapper());
+            analysisOrchestrator, gitHubInstallationService, repositoryService,
+            new ObjectMapper(), new SimpleMeterRegistry());
 
     @Test
     void route_parsesAndForwardsPullRequestEvents() {

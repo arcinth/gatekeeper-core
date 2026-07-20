@@ -66,6 +66,10 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setMaxPoolSize(maxPoolSize);
         executor.setQueueCapacity(queueCapacity);
         executor.setThreadNamePrefix("analysis-exec-");
+        // Milestone 9: Observability - without this, every log line the deterministic
+        // pipeline produces on this pool would be missing correlationId/userId/etc.,
+        // since MDC is thread-local and this pool's threads aren't the request thread.
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.initialize();
         return executor;
     }
@@ -77,6 +81,7 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setMaxPoolSize(aiReviewMaxPoolSize);
         executor.setQueueCapacity(aiReviewQueueCapacity);
         executor.setThreadNamePrefix("ai-review-exec-");
+        executor.setTaskDecorator(new MdcTaskDecorator());
         executor.initialize();
         return executor;
     }

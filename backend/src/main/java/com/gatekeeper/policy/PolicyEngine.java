@@ -1,5 +1,7 @@
 package com.gatekeeper.policy;
 
+import com.gatekeeper.observability.ObservedOperation;
+import com.gatekeeper.observability.OperationCategory;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -68,6 +70,7 @@ public class PolicyEngine {
      * every finding in the returned result reflects exactly the configuration
      * passed in, never a value read at some other point during evaluation.
      */
+    @ObservedOperation(value = "policy.evaluate", category = OperationCategory.POLICY_ENGINE)
     public PolicyResult evaluate(PolicyContext context, PolicyConfigurationSet configuration) {
         List<PolicyRule> enabledRules = rules.stream()
                 .filter(rule -> configuration.isEnabled(rule.id()))

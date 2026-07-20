@@ -2,6 +2,8 @@ package com.gatekeeper.github;
 
 import com.gatekeeper.github.dto.InstallationAccessTokenResponse;
 import io.jsonwebtoken.Jwts;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,17 +42,25 @@ public class GitHubAppAuthService {
     private final String privateKeyPem;
 
     private final ConcurrentHashMap<Long, CachedInstallationToken> installationTokenCache = new ConcurrentHashMap<>();
+    private final MeterRegistry meterRegistry;
 
     public GitHubAppAuthService(
             GitHubApiClient gitHubApiClient,
             Clock clock,
             @Value("${gatekeeper.github.app.id}") long appId,
             @Value("${gatekeeper.github.app.private-key}") String privateKeyPem,
-            @Value("${gatekeeper.github.app.private-key-path:}") String privateKeyPath) {
+            @Value("${gatekeeper.github.app.private-key-path:}") String privateKeyPath,
+            MeterRegistry meterRegistry) {
         this.gitHubApiClient = gitHubApiClient;
         this.clock = clock;
         this.appId = appId;
         this.privateKeyPem = resolvePrivateKeyPem(privateKeyPem, privateKeyPath);
+        this.meterRegistry = meterRegistry;
+        // Milestone 9: Observability - a Gauge bound directly to the existing cache,
+        // not a new caching abstraction; reports the live map size on every scrape.
+        Gauge.builder("gatekeeper.github.token.cache.size", installationTokenCache, ConcurrentHashMap::size)
+                .description("Number of installation access tokens currently cached")
+                .register(meterRegistry);
     }
 
     /**
@@ -81,8 +91,10 @@ public class GitHubAppAuthService {
     public String getInstallationAccessToken(long installationId) {
         CachedInstallationToken cached = installationTokenCache.get(installationId);
         if (cached != null && cached.isValidAt(clock.instant())) {
+            meterRegistry.counter("gatekeeper.github.token.cache.access", "outcome", "hit").increment();
             return cached.token();
         }
+        meterRegistry.counter("gatekeeper.github.token.cache.access", "outcome", "refreshed").increment();
         return fetchAndCacheInstallationToken(installationId);
     }
 

@@ -52,6 +52,11 @@ gatekeeper:
     app:
       # 0 is treated as "unset" - GitHubSecretsStartupValidator fails startup under prod if this is still 0.
       id: ${GITHUB_APP_ID:0}
+      # The App's public URL slug, e.g. "gatekeeper-core" from https://github.com/apps/gatekeeper-core.
+      # Used only to build the install-url GitHubInstallationController returns (Milestone 8: Repository
+      # Onboarding) - blank means "not configured", and that endpoint reports appConfigured=false rather
+      # than returning a broken link.
+      slug: ${GITHUB_APP_SLUG:}
       # PKCS#8 PEM ("-----BEGIN PRIVATE KEY-----"). GitHub issues PKCS#1 keys by default; convert with:
       # openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in <downloaded-key>.pem -out <pkcs8-key>.pem
       #

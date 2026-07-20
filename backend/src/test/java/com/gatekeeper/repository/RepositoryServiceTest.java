@@ -13,6 +13,8 @@ import com.gatekeeper.github.dto.InstallationRepositoriesResponse.RepositorySumm
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload.InstallationReference;
 import com.gatekeeper.github.dto.InstallationRepositoriesWebhookPayload.RepositoryReference;
+import com.gatekeeper.auditlog.AuditEvent;
+import com.gatekeeper.auditlog.AuditEventType;
 import com.gatekeeper.auditlog.AuditLogService;
 import com.gatekeeper.organization.Organization;
 import com.gatekeeper.organization.OrganizationService;
@@ -23,9 +25,11 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * Covers only handleInstallationRepositoriesEvent - RepositoryService's other
- * methods (create/update/delete/findAll/findById) predate this class and are
- * exercised through RepositoryControllerTest instead.
+ * Covers handleInstallationRepositoriesEvent/synchronizeFromInstallation -
+ * the only path a repository is ever created or connected since Milestone 8
+ * removed manual creation - including the REPOSITORY_CONNECTED/UPDATED audit
+ * trail they now produce. update/delete/findAll/findById predate this class
+ * and are exercised through RepositoryControllerTest instead.
  */
 class RepositoryServiceTest {
 
@@ -68,6 +72,10 @@ class RepositoryServiceTest {
         assertThat(repository.getOwner()).isEqualTo("octocat");
         assertThat(repository.getGithubInstallation()).isEqualTo(installation);
         assertThat(repository.isActive()).isTrue();
+
+        ArgumentCaptor<AuditEvent> audited = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditLogService).record(audited.capture());
+        assertThat(audited.getValue().getEventType()).isEqualTo(AuditEventType.REPOSITORY_CONNECTED);
     }
 
     @Test
@@ -92,6 +100,28 @@ class RepositoryServiceTest {
         assertThat(existing.getFullName()).isEqualTo("octocat/core");
         assertThat(existing.getOwner()).isEqualTo("octocat");
         assertThat(existing.isActive()).isTrue();
+
+        ArgumentCaptor<AuditEvent> audited = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditLogService).record(audited.capture());
+        assertThat(audited.getValue().getEventType()).isEqualTo(AuditEventType.REPOSITORY_UPDATED);
+    }
+
+    @Test
+    void handleInstallationRepositoriesEvent_doesNotAuditARoutineResyncThatChangesNothing() {
+        Repository existing = Repository.builder()
+                .organization(organization)
+                .githubRepositoryId(GITHUB_REPOSITORY_ID)
+                .name("core")
+                .fullName("octocat/core")
+                .active(true)
+                .build();
+        when(repositoryRepository.findByGithubRepositoryId(GITHUB_REPOSITORY_ID)).thenReturn(Optional.of(existing));
+
+        service.handleInstallationRepositoriesEvent(
+                payload("added", List.of(new RepositoryReference(GITHUB_REPOSITORY_ID, "core", "octocat/core")), List.of()),
+                DELIVERY_ID);
+
+        verify(auditLogService, never()).record(any());
     }
 
     @Test
@@ -110,6 +140,28 @@ class RepositoryServiceTest {
 
         assertThat(existing.isActive()).isFalse();
         verify(repositoryRepository).save(existing);
+
+        ArgumentCaptor<AuditEvent> audited = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditLogService).record(audited.capture());
+        assertThat(audited.getValue().getEventType()).isEqualTo(AuditEventType.REPOSITORY_UPDATED);
+    }
+
+    @Test
+    void handleInstallationRepositoriesEvent_doesNotAuditRemovalOfAnAlreadyInactiveRepository() {
+        Repository existing = Repository.builder()
+                .organization(organization)
+                .githubRepositoryId(GITHUB_REPOSITORY_ID)
+                .fullName("octocat/core")
+                .active(false)
+                .build();
+        when(repositoryRepository.findByGithubRepositoryId(GITHUB_REPOSITORY_ID)).thenReturn(Optional.of(existing));
+
+        service.handleInstallationRepositoriesEvent(
+                payload("removed", List.of(), List.of(new RepositoryReference(GITHUB_REPOSITORY_ID, "core", "octocat/core"))),
+                DELIVERY_ID);
+
+        verify(repositoryRepository, never()).save(any());
+        verify(auditLogService, never()).record(any());
     }
 
     @Test
@@ -150,6 +202,10 @@ class RepositoryServiceTest {
         assertThat(repository.getOwner()).isEqualTo("arcinth");
         assertThat(repository.getGithubInstallation()).isEqualTo(installation);
         assertThat(repository.isActive()).isTrue();
+
+        ArgumentCaptor<AuditEvent> audited = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditLogService).record(audited.capture());
+        assertThat(audited.getValue().getEventType()).isEqualTo(AuditEventType.REPOSITORY_CONNECTED);
     }
 
     @Test
@@ -169,6 +225,10 @@ class RepositoryServiceTest {
         verify(repositoryRepository).save(saved.capture());
         assertThat(saved.getValue()).isSameAs(existing);
         assertThat(existing.isActive()).isTrue();
+
+        ArgumentCaptor<AuditEvent> audited = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditLogService).record(audited.capture());
+        assertThat(audited.getValue().getEventType()).isEqualTo(AuditEventType.REPOSITORY_UPDATED);
     }
 
     @Test

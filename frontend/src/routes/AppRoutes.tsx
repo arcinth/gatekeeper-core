@@ -13,6 +13,7 @@ import { VerdictsPage } from '../pages/VerdictsPage'
 import { VerdictDetailPage } from '../pages/VerdictDetailPage'
 import { RepositoryGovernancePage } from '../pages/RepositoryGovernancePage'
 import { RepositoriesPage } from '../pages/RepositoriesPage'
+import { RepositoryConnectCallbackPage } from '../pages/RepositoryConnectCallbackPage'
 import { PolicyManagementPage } from '../pages/PolicyManagementPage'
 import { UsersPage } from '../pages/UsersPage'
 import { AuditLogPage } from '../pages/AuditLogPage'
@@ -115,6 +116,14 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <RepositoriesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/repositories/connect/callback"
+        element={
+          <ProtectedRoute>
+            <RepositoryConnectCallbackPage />
           </ProtectedRoute>
         }
       />

@@ -58,7 +58,7 @@ A small, fixed set of capabilities — one per *distinct action* the platform ex
 |---|---|
 | `WORKSPACE_READ` | View Pull Requests, analysis runs, policy/security/AI findings, verdicts, engineering reports, the dashboard, repositories, and repository governance |
 | `REVIEW_DECISION_CREATE` | Submit an APPROVE/REJECT review decision against an analysis run |
-| `REPOSITORY_MANAGE` | Connect, update, or remove a repository |
+| `REPOSITORY_MANAGE` | Connect, update, or remove a repository; start a GitHub App installation or trigger a manual repository resync (Milestone 8) |
 | `POLICY_MANAGE` | Enable/disable a policy rule or override its severity for the organization (Milestone 6) |
 | `USER_MANAGE` | Create, update, or remove users |
 | `ROLE_MANAGE` | Create, update, or remove roles |
@@ -109,7 +109,7 @@ This matters specifically because `Role` is a manageable entity: an administrato
 
 ---
 
-# Known Limitations (as of Milestone 7)
+# Known Limitations (as of Milestone 8)
 
 - **Static, in-code mapping.** `RolePermissions` is a compile-time table, not data in the database. A custom role created via `RoleController` gets no permissions until a developer updates the mapping in code. A future "permission assignment" capability (letting administrators configure a custom role's permissions through the API/UI) would extend this model without changing how any controller is annotated — controllers only ever reference `Permission`, never the mapping's storage mechanism.
 - **Frontend is not permission-aware yet.** The UI does not hide actions a user cannot perform; a `DEVELOPER` still sees the "Submit Decision" form and receives a 403 from the backend on submit. This is deliberately out of scope for Milestone 5 and is expected to be addressed in a following, focused milestone.

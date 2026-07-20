@@ -6,8 +6,10 @@ import com.gatekeeper.security.JwtAuthenticationFilter;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -23,6 +25,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -57,6 +60,32 @@ public class SecurityConfig {
     }
 
     /**
+     * Registered as a plain servlet filter at the highest possible precedence
+     * - ahead of Spring Security's own {@code DelegatingFilterProxy} entirely
+     * - rather than through {@code HttpSecurity.cors(...)}. That was the first
+     * approach tried: it built a correctly-configured {@code CorsFilter}
+     * (confirmed via reflection on the built {@code SecurityFilterChain} -
+     * right origins, methods, headers, credentials flag), the same class this
+     * one wraps, but a live cross-origin preflight from the real frontend
+     * still came back {@code 403} regardless of configuration, on this
+     * environment. The same failure mode as {@code SecurityHeadersFilter}
+     * (see its Javadoc): something about Spring Security's own internal
+     * filter dispatch not reliably applying a piece registered through its
+     * DSL, even though the configuration going in is correct. This filter -
+     * plain, direct, outside Spring Security's chain, the same proven
+     * pattern - handles CORS (including short-circuiting preflight requests)
+     * before the request ever reaches Spring Security, so an OPTIONS
+     * preflight to a protected endpoint is answered without needing
+     * authentication at all.
+     */
+    @Bean
+    public FilterRegistrationBean<CorsFilter> corsFilterRegistration() {
+        FilterRegistrationBean<CorsFilter> registration = new FilterRegistrationBean<>(new CorsFilter(corsConfigurationSource()));
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        return registration;
+    }
+
+    /**
      * CSP/HSTS/Referrer-Policy/Permissions-Policy (Milestone 10: Security
      * Hardening, Section 2) are set by {@link SecurityHeadersFilter}, a plain
      * servlet filter, not through {@code HttpSecurity.headers(...)} - see
@@ -64,12 +93,15 @@ public class SecurityConfig {
      * {@code X-Frame-Options}, and {@code Cache-Control} are already covered
      * by Spring Security's own default headers and needed no configuration
      * here at all.
+     * <p>
+     * No {@code .cors(...)} call here - CORS is fully handled by
+     * {@link #corsFilterRegistration()} ahead of this chain; see that
+     * bean's Javadoc for why.
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(handler -> handler
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)

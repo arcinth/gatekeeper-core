@@ -4,11 +4,14 @@ import com.gatekeeper.common.ApiResponse;
 import com.gatekeeper.github.dto.GitHubInstallationResponse;
 import com.gatekeeper.github.dto.InstallUrlResponse;
 import com.gatekeeper.repository.RepositoryRepository;
+import com.gatekeeper.security.SecurityUser;
+import com.gatekeeper.security.ratelimit.RateLimitService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,6 +43,7 @@ public class GitHubInstallationController {
     private final GitHubInstallationService gitHubInstallationService;
     private final GitHubRepositorySyncService gitHubRepositorySyncService;
     private final RepositoryRepository repositoryRepository;
+    private final RateLimitService rateLimitService;
 
     @Value("${gatekeeper.github.app.id}")
     private long appId;
@@ -78,7 +82,10 @@ public class GitHubInstallationController {
     /** Synchronously re-runs the same reconciliation GitHubRepositorySyncService already runs asynchronously after every "installation" webhook. */
     @PostMapping("/installations/{id}/sync")
     @PreAuthorize("hasAuthority('REPOSITORY_MANAGE')")
-    public ApiResponse<GitHubInstallationResponse> sync(@PathVariable Long id) {
+    public ApiResponse<GitHubInstallationResponse> sync(@PathVariable Long id, @AuthenticationPrincipal SecurityUser principal) {
+        // Rate-limited per caller, not per installation (Milestone 10: Security Hardening) -
+        // this protects against one user's repeated-click loop, not a shared installation resource.
+        rateLimitService.checkRepositorySync(principal.getId());
         GitHubInstallation installation = gitHubInstallationService.findByIdOrThrow(id);
         gitHubRepositorySyncService.synchronize(installation.getInstallationId());
         return ApiResponse.ok(

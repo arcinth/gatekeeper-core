@@ -39,3 +39,32 @@ jobs:
         with:
           name: surefire-reports
           path: backend/target/surefire-reports/
+
+      # Milestone 10: Security Hardening. A separate step (not bound into the
+      # `mvn clean package` lifecycle in pom.xml) so a normal local build never pays
+      # the cost of a vulnerability-database refresh - only CI does. Fails the job on
+      # any currently-known CVSS >= 7 (High/Critical) finding - see
+      # docs/Security-Hardening.md for the severity policy and how to record an
+      # accepted-risk suppression.
+      - name: OWASP Dependency-Check
+        working-directory: backend
+        run: ./mvnw org.owasp:dependency-check-maven:check
+
+      - name: Upload Dependency-Check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: backend/target/dependency-check-report.*
+
+      # CycloneDX SBOM (Milestone 10: Security Hardening) - a machine-readable bill of
+      # materials for every dependency in this build, published as a build artifact.
+      - name: Generate SBOM
+        working-directory: backend
+        run: ./mvnw org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: backend/target/bom.json

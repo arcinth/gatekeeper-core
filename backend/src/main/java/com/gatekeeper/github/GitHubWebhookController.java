@@ -1,5 +1,6 @@
 package com.gatekeeper.github;
 
+import com.gatekeeper.security.ratelimit.RateLimitService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,7 @@ public class GitHubWebhookController {
 
     private final WebhookSignatureVerifier webhookSignatureVerifier;
     private final GitHubEventRouter gitHubEventRouter;
+    private final RateLimitService rateLimitService;
 
     @PostMapping("/webhook")
     public ResponseEntity<Void> receiveWebhook(
@@ -31,6 +33,9 @@ public class GitHubWebhookController {
             @RequestHeader(value = "X-GitHub-Event", required = false) String eventType,
             @RequestHeader(value = "X-GitHub-Delivery", required = false) String deliveryId) {
 
+        // Checked before signature verification (Milestone 10: Security Hardening) so a
+        // flood of forged deliveries is rejected before paying the HMAC computation cost.
+        rateLimitService.checkWebhook();
         webhookSignatureVerifier.verify(payload, signature);
         gitHubEventRouter.route(eventType, payload, deliveryId);
 

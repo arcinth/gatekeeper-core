@@ -19,7 +19,14 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=build /workspace/target/gatekeeper-core.jar app.jar
+# Non-root container user (Milestone 10: Security Hardening) - the base image runs as
+# root by default, which turns any future code-execution vulnerability in the app or
+# its dependencies into a much worse container-escape scenario than it needs to be.
+# A dedicated system user/group (no login shell, no home directory) owns only what it
+# needs to: the jar it runs.
+RUN groupadd --system gatekeeper && useradd --system --gid gatekeeper --no-create-home gatekeeper
+COPY --from=build --chown=gatekeeper:gatekeeper /workspace/target/gatekeeper-core.jar app.jar
+USER gatekeeper
 EXPOSE 8080
 # Actuator's own port (Milestone 9: Observability) - deliberately not published to
 # the host by a real production deployment; docker-compose.yml publishes it here

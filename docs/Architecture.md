@@ -264,7 +264,21 @@ Full detail — the metrics catalog, health indicator behavior, logging fields, 
 
 ---
 
-## 19. Architecture Decision Records (ADR)
+## 19. Security Hardening (Cross-Cutting)
+
+Like Observability (Section 18), Security Hardening (Milestone 10) is not a new architectural layer - it wraps every layer without any layer taking on a new dependency because of it.
+
+- **HTTP security headers** and **CORS tightening** apply at the same `SecurityConfig` filter-chain boundary every request already passes through - additive configuration, not a new component.
+- **Rate limiting** (`com.gatekeeper.security.ratelimit`) sits in front of a small, named set of endpoints (login, refresh, the GitHub webhook, repository sync) as an explicit check each controller calls before its existing business logic runs - a request that passes the check reaches exactly the same authentication/authorization/business code that existed before this milestone.
+- **JWT hardening** (issuer validation, clock skew, reuse detection) is a set of targeted edits inside the existing `JwtService`/`AuthService`, preserving every method signature and the token format itself.
+- **Secrets validation** extends the existing `@Profile("prod")` startup-validator pattern from Milestones 1-9 with two additional, shared checks - no new validator classes, no new bean type.
+- **Dependency/secret scanning** and **Docker hardening** are CI and container-runtime concerns with no runtime application dependency at all.
+
+Full detail - the header reference, rate-limit thresholds, JWT hardening specifics, secrets policy, CI scanning tools, and Docker changes - lives in [Security-Hardening.md](./Security-Hardening.md), consistent with this document staying at the level of layers, boundaries, and decisions.
+
+---
+
+## 20. Architecture Decision Records (ADR)
 
 ### ADR-001: GitHub communication is isolated to a dedicated integration module
 
@@ -359,3 +373,15 @@ Full detail — the metrics catalog, health indicator behavior, logging fields, 
 **Decision:** Actuator endpoints (health, info, metrics, prometheus, startup) are served on a separate `management.server.port`, isolated from the public API port by network configuration rather than by an application-level credential — the same trust boundary already accepted for PostgreSQL's own port in this project. An explicit endpoint allowlist (`env`, `beans`, `configprops`, `heapdump`, `threaddump`, `shutdown` never included) provides defense in depth on top of that isolation.
 
 **Consequences:** Standard infrastructure tooling can scrape GateKeeper without any GateKeeper-specific credential, and RBAC's permission set stays scoped to genuine business capabilities rather than growing an entry for machine-only access. A deployment that fails to keep the management port off the public network relies on the endpoint allowlist as its only remaining defense — operators must not publish this port on a public load balancer or ingress (see [Observability.md](./Observability.md)).
+
+---
+
+### ADR-009: Rate limiting is in-memory and per-instance, behind a swappable abstraction
+
+**Status:** Accepted
+
+**Context:** Milestone 10 needed to close a real gap - login, refresh, and the GitHub webhook endpoint had no rate limiting at all. GateKeeper does not otherwise depend on Redis or any other shared-state infrastructure, and introducing one solely for rate limiting would be a larger infrastructure commitment than "harden what exists" called for, and would work against the "deployable on any infrastructure" requirement.
+
+**Decision:** Rate limiting is implemented with Bucket4j entirely in-memory, behind a `RateLimiter` interface (`com.gatekeeper.security.ratelimit`) that callers depend on instead of Bucket4j directly. `InMemoryRateLimiter` is the only implementation.
+
+**Consequences:** GateKeeper gains real protection against brute force, credential stuffing, and webhook flooding without a new infrastructure dependency, at the accepted cost that limits are enforced per-instance rather than cluster-wide (a 3-instance deployment effectively multiplies each limit by up to 3 in the worst case). A future Redis-backed implementation for horizontal scaling is a new class implementing the same `RateLimiter` interface, not a change to `RateLimitService` or any controller.

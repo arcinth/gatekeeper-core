@@ -22,6 +22,10 @@ public class GitHubSecretsStartupValidator {
     private static final String DEFAULT_WEBHOOK_SECRET =
             "local-development-webhook-secret-change-me-in-production-please";
 
+    // The webhook secret is an HMAC-SHA256 key (see WebhookSignatureVerifier) - 20 characters
+    // is a practical floor, not a cryptographic one (Milestone 10: Security Hardening).
+    private static final int MINIMUM_WEBHOOK_SECRET_LENGTH = 20;
+
     private final String webhookSecret;
     private final String appPrivateKey;
     private final String appPrivateKeyPath;
@@ -45,6 +49,8 @@ public class GitHubSecretsStartupValidator {
                     "Refusing to start under the 'prod' profile: GITHUB_WEBHOOK_SECRET is still set to its "
                             + "default development value. Set it to a unique, securely generated secret.");
         }
+        SecretStrengthValidator.requireNotWeak("GITHUB_WEBHOOK_SECRET", webhookSecret);
+        SecretStrengthValidator.requireMinimumLength("GITHUB_WEBHOOK_SECRET", webhookSecret, MINIMUM_WEBHOOK_SECRET_LENGTH);
         boolean privateKeyMissing = (appPrivateKey == null || appPrivateKey.isBlank())
                 && (appPrivateKeyPath == null || appPrivateKeyPath.isBlank());
         if (privateKeyMissing) {

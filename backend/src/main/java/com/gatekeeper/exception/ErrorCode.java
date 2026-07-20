@@ -10,6 +10,7 @@ public enum ErrorCode {
     GK_404(HttpStatus.NOT_FOUND, "GK-404"),
     GK_409(HttpStatus.CONFLICT, "GK-409"),
     GK_422(HttpStatus.UNPROCESSABLE_ENTITY, "GK-422"),
+    GK_429(HttpStatus.TOO_MANY_REQUESTS, "GK-429"),
     GK_500(HttpStatus.INTERNAL_SERVER_ERROR, "GK-500");
 
     private final HttpStatus httpStatus;

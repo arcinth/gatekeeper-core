@@ -177,6 +177,18 @@ All variables below are read by the backend (`application.yml`). None are requir
 | `REPORT_AI_WAIT_TIMEOUT_SECONDS` | `120` | How long report publication waits for AI Review before publishing without it. |
 | `REPORT_SWEEP_INTERVAL_MS` | `60000` | How often the report timeout sweep runs. |
 
+**Observability** — optional; the defaults work for local development. See [docs/Observability.md](docs/Observability.md) for what these control.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MANAGEMENT_SERVER_PORT` | `8081` | Port Actuator (health/info/metrics/prometheus/startup) is served on — separate from `SERVER_PORT`. |
+| `DEPLOYMENT_ENVIRONMENT` | `local` | Free-text label surfaced at `/actuator/info` as `deployment.environment` (matched case-insensitively against `prod`/`stag`/`dev`/`local`). |
+| `OBSERVABILITY_THRESHOLD_GITHUB_API_MS` | `3000` | Slow-call WARN threshold for GitHub API calls. |
+| `OBSERVABILITY_THRESHOLD_POLICY_MS` | `1000` | Slow-call WARN threshold for Policy Engine evaluation. |
+| `OBSERVABILITY_THRESHOLD_SECURITY_MS` | `1000` | Slow-call WARN threshold for Security Engine evaluation. |
+| `OBSERVABILITY_THRESHOLD_REVIEW_MS` | `30000` | Slow-call WARN threshold for AI Review Engine evaluation. |
+| `OBSERVABILITY_THRESHOLD_ANALYSIS_MS` | `5000` | Slow-call WARN threshold for the analysis pipeline. |
+
 **Production**
 
 Three startup checks exist only under the `prod` profile — see [Bootstrap Administrator](#bootstrap-administrator) for what they do. There is no separate variable to enable them; they activate automatically when `SPRING_PROFILES_ACTIVE=prod`.
@@ -213,11 +225,13 @@ Once both are running:
 |---|---|
 | Frontend (login page) | `http://localhost:5173/login` |
 | Backend base URL | `http://localhost:8080` |
-| Backend health check | `http://localhost:8080/actuator/health` |
+| Backend health check | `http://localhost:8081/actuator/health` |
 | Swagger UI | `http://localhost:8080/swagger-ui.html` |
 | OpenAPI JSON | `http://localhost:8080/v3/api-docs` |
 
 Swagger UI and the OpenAPI JSON endpoint are available under `local` and `dev`. They're disabled under `prod` (`springdoc.swagger-ui.enabled: false` in `application-prod.yml`).
+
+Note that the health check runs on port **8081**, not 8080 — Actuator (health, metrics, info, prometheus, startup) is served on its own management port, entirely separate from the API port. See [docs/Observability.md](docs/Observability.md) for the full reference and why.
 
 Sign in with the bootstrap administrator credentials described above. The frontend redirects to `/dashboard` after a successful login.
 
@@ -229,7 +243,7 @@ Sign in with the bootstrap administrator credentials described above. The fronte
 ./mvnw test
 ```
 
-Most tests are plain unit tests with no external dependencies. Six of them are full integration tests (`AnalysisRunAndPolicyFindingQueryIntegrationTest`, `PolicyEngineExecutionIntegrationTest`, `PullRequestWebhookIntegrationTest`, `SecurityEngineExecutionIntegrationTest`, `SecurityFindingQueryIntegrationTest`, `UserAndAuthLazyLoadingIntegrationTest`) and use Testcontainers to start a real, disposable PostgreSQL container per test class rather than mocking the database. These need a Docker daemon that Testcontainers can actually detect from wherever `mvn test` is running. If it can't find one, those six tests fail with `IllegalState: Could not find a valid Docker environment` while everything else still passes — that's an environment issue, not a sign the code is broken. Several of these tests also use WireMock to stand in for the GitHub API, so a real GitHub App is never required to run the suite.
+Most tests are plain unit tests with no external dependencies. A subset are full integration tests, annotated `@Testcontainers`, that start a real, disposable PostgreSQL container per test class rather than mocking the database (as of Milestone 9: `AnalysisRunAndPolicyFindingQueryIntegrationTest`, `AuditLogIntegrationTest`, `InstallationOnboardingIntegrationTest`, `ObservabilityIntegrationTest`, `PolicyEngineExecutionIntegrationTest`, `PullRequestQueryIntegrationTest`, `PullRequestWebhookIntegrationTest`, `ReviewDecisionCheckRunIntegrationTest`, `ReviewDecisionIntegrationTest`, `SecurityEngineExecutionIntegrationTest`, `SecurityFindingQueryIntegrationTest`, `UserAndAuthLazyLoadingIntegrationTest` — search for `@Testcontainers` under `backend/src/test` for the current, authoritative list, since new milestones add to it). These need a Docker daemon that Testcontainers can actually detect from wherever `mvn test` is running. If it can't find one, those tests fail with `IllegalState: Could not find a valid Docker environment` while everything else still passes — that's an environment issue, not a sign the code is broken. Several of these tests also use WireMock to stand in for the GitHub API, so a real GitHub App is never required to run the suite.
 
 **Frontend** — from `frontend/`:
 
@@ -264,6 +278,7 @@ There is no automated frontend test suite (no Jest, Vitest, or Playwright config
 | [docs/Domain-Model.md](docs/Domain-Model.md) | Core business entities and how they relate |
 | [docs/Database.md](docs/Database.md) | Data model and entity relationships |
 | [docs/API-Design.md](docs/API-Design.md) | REST API conventions and endpoint groups |
+| [docs/Observability.md](docs/Observability.md) | Health endpoints, metrics, structured logging, and the management port |
 | [docs/Product-Backlog.md](docs/Product-Backlog.md) | Epics, features, and the sprint plan the MVP was built against |
 
 ## Development Notes

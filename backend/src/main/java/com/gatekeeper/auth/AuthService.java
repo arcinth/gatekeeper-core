@@ -7,6 +7,7 @@ import com.gatekeeper.security.JwtService;
 import com.gatekeeper.user.User;
 import com.gatekeeper.user.UserRepository;
 import io.jsonwebtoken.Claims;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -23,36 +24,58 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
+    private final MeterRegistry meterRegistry;
 
+    /**
+     * outcome=success/failure tags on gatekeeper.auth.login.attempts (Milestone
+     * 9: Observability) - never the attempted email, which would be both a
+     * cardinality and a PII problem; a login-failure spike is visible from the
+     * counter alone; a specific account's failures are a job for the audit
+     * trail (Milestone 7) or log correlation, not a metric tag.
+     */
     public TokenResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
-        User user = userRepository.findByEmailIgnoreCase(request.email())
-                .orElseThrow(() -> new InvalidTokenException("Invalid email or password."));
+            User user = userRepository.findByEmailIgnoreCase(request.email())
+                    .orElseThrow(() -> new InvalidTokenException("Invalid email or password."));
 
-        return issueTokens(user);
+            TokenResponse response = issueTokens(user);
+            meterRegistry.counter("gatekeeper.auth.login.attempts", "outcome", "success").increment();
+            return response;
+        } catch (RuntimeException ex) {
+            meterRegistry.counter("gatekeeper.auth.login.attempts", "outcome", "failure").increment();
+            throw ex;
+        }
     }
 
     public TokenResponse refresh(String refreshTokenValue) {
-        Claims claims = jwtService.parseClaims(refreshTokenValue);
-        if (!JwtService.TOKEN_TYPE_REFRESH.equals(claims.get(JwtService.CLAIM_TYPE, String.class))) {
-            throw new InvalidTokenException("Token is not a refresh token.");
+        try {
+            Claims claims = jwtService.parseClaims(refreshTokenValue);
+            if (!JwtService.TOKEN_TYPE_REFRESH.equals(claims.get(JwtService.CLAIM_TYPE, String.class))) {
+                throw new InvalidTokenException("Token is not a refresh token.");
+            }
+
+            String jti = claims.getId();
+            RefreshToken storedToken = refreshTokenRepository.findByTokenHash(TokenHasher.sha256(jti))
+                    .orElseThrow(() -> new InvalidTokenException("Refresh token is unknown or has already been used."));
+
+            if (storedToken.isRevoked() || storedToken.getExpiresAt().isBefore(Instant.now())) {
+                throw new InvalidTokenException("Refresh token has expired or was revoked.");
+            }
+
+            storedToken.setRevoked(true);
+            refreshTokenRepository.save(storedToken);
+
+            User user = storedToken.getUser();
+            TokenResponse response = issueTokens(user);
+            meterRegistry.counter("gatekeeper.auth.token.refresh", "outcome", "success").increment();
+            return response;
+        } catch (RuntimeException ex) {
+            meterRegistry.counter("gatekeeper.auth.token.refresh", "outcome", "failure").increment();
+            throw ex;
         }
-
-        String jti = claims.getId();
-        RefreshToken storedToken = refreshTokenRepository.findByTokenHash(TokenHasher.sha256(jti))
-                .orElseThrow(() -> new InvalidTokenException("Refresh token is unknown or has already been used."));
-
-        if (storedToken.isRevoked() || storedToken.getExpiresAt().isBefore(Instant.now())) {
-            throw new InvalidTokenException("Refresh token has expired or was revoked.");
-        }
-
-        storedToken.setRevoked(true);
-        refreshTokenRepository.save(storedToken);
-
-        User user = storedToken.getUser();
-        return issueTokens(user);
     }
 
     public void logout(String refreshTokenValue) {

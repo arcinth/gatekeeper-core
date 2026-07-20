@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gatekeeper.github.exception.InvalidWebhookSignatureException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import javax.crypto.Mac;
@@ -14,7 +15,7 @@ class WebhookSignatureVerifierTest {
 
     private static final String SECRET = "test-webhook-secret";
 
-    private final WebhookSignatureVerifier verifier = new WebhookSignatureVerifier(SECRET);
+    private final WebhookSignatureVerifier verifier = new WebhookSignatureVerifier(SECRET, new SimpleMeterRegistry());
 
     @Test
     void verify_acceptsCorrectlySignedPayload() {

@@ -16,6 +16,7 @@ import com.gatekeeper.pullrequest.PullRequestRepository;
 import com.gatekeeper.repository.RepositoryRepository;
 import com.gatekeeper.user.User;
 import com.gatekeeper.user.UserRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -39,9 +40,10 @@ class AuditLogServiceTest {
     private final AnalysisRunRepository analysisRunRepository = mock(AnalysisRunRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final AuditLogService service = new AuditLogService(
             auditLogRepository, organizationRepository, repositoryRepository,
-            pullRequestRepository, analysisRunRepository, userRepository, objectMapper);
+            pullRequestRepository, analysisRunRepository, userRepository, objectMapper, meterRegistry);
 
     private final Organization organization = Organization.builder().name("Acme").build();
 

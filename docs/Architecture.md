@@ -252,7 +252,19 @@ Other future capabilities noted in the Product Vision and Product Backlog — ad
 
 ---
 
-## 18. Architecture Decision Records (ADR)
+## 18. Observability (Cross-Cutting)
+
+Observability (Milestone 9) is deliberately **not** a seventh architectural layer. It does not sit in the Integration → Orchestration → Engine → Decision → Persistence dependency chain defined in Section 2, and no existing layer depends on it for correctness — a layer can be understood and could theoretically run correctly with observability removed entirely. Instead, it wraps every layer uniformly: health, metrics, structured logs, performance timing, and error monitoring are added around existing components without altering any component's responsibilities, dependencies, or contracts.
+
+- **Health, metrics, and application info** are exposed by Spring Boot Actuator/Micrometer on a separate management port — an operational surface, not a REST API business capability, and therefore not part of the layer chain in Section 2 or the API Groups in Section 13.
+- **Structured logging** (correlation id, request id, actor identity) is carried through SLF4J's MDC, propagated across `@Async` boundaries — an orthogonal concern threaded through every layer's existing request/event handling, not a new dependency any layer takes on another.
+- **Performance monitoring** (`@ObservedOperation`) and **error monitoring** (extending the existing `GlobalExceptionHandler`) observe calls into the Engine Layer and Integration Layer from the outside; neither changes what those layers compute or return.
+
+Full detail — the metrics catalog, health indicator behavior, logging fields, and the management-port trust model — lives in [Observability.md](./Observability.md), not in this document, consistent with this document staying at the level of layers, boundaries, and decisions rather than an operational reference.
+
+---
+
+## 19. Architecture Decision Records (ADR)
 
 ### ADR-001: GitHub communication is isolated to a dedicated integration module
 
@@ -335,3 +347,15 @@ Other future capabilities noted in the Product Vision and Product Backlog — ad
 **Decision:** `AuditLog` is retained as a persisted entity, linked to `AnalysisRun`, `Finding`, and `Verdict` records, rather than treated as incidental logging.
 
 **Consequences:** Governance decisions can be audited and defended after the fact, satisfying the "predictable, explainable, and auditable" requirement from the Product Vision.
+
+---
+
+### ADR-008: Observability endpoints are isolated by a separate network port, not RBAC
+
+**Status:** Accepted
+
+**Context:** Milestone 9 needed a way for infrastructure tooling (Prometheus, container orchestrators) to reach health/metrics endpoints. Prometheus and orchestrator probes have no natural way to hold a GateKeeper JWT, so gating these endpoints behind the existing RBAC model would require inventing a permission (`SYSTEM_MONITOR`) that exists solely to be handed to infrastructure, not to a person or a real business role.
+
+**Decision:** Actuator endpoints (health, info, metrics, prometheus, startup) are served on a separate `management.server.port`, isolated from the public API port by network configuration rather than by an application-level credential — the same trust boundary already accepted for PostgreSQL's own port in this project. An explicit endpoint allowlist (`env`, `beans`, `configprops`, `heapdump`, `threaddump`, `shutdown` never included) provides defense in depth on top of that isolation.
+
+**Consequences:** Standard infrastructure tooling can scrape GateKeeper without any GateKeeper-specific credential, and RBAC's permission set stays scoped to genuine business capabilities rather than growing an entry for machine-only access. A deployment that fails to keep the management port off the public network relies on the endpoint allowlist as its only remaining defense — operators must not publish this port on a public load balancer or ingress (see [Observability.md](./Observability.md)).

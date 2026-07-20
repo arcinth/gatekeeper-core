@@ -472,6 +472,12 @@ Every endpoint must:
 
 ---
 
+# Operational Endpoints (Not Part of `/api/v1`)
+
+GateKeeper also exposes health, metrics, and application-info endpoints via Spring Boot Actuator (Milestone 9: Observability) — `/actuator/health`, `/actuator/info`, `/actuator/metrics`, `/actuator/prometheus`, `/actuator/startup`. These are **not** business API endpoints: they are served on a separate management port, are not versioned under `/api/v1`, require no JWT (isolated by network reachability instead — see below), and are not intended for the frontend or any third-party client. See [Observability.md](./Observability.md) for the full reference and the reasoning behind serving them on a separate port rather than gating them with a new RBAC permission.
+
+---
+
 # Future APIs
 
 Future versions may introduce:

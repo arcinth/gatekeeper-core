@@ -1,5 +1,7 @@
 package com.gatekeeper.securityengine;
 
+import com.gatekeeper.observability.ObservedOperation;
+import com.gatekeeper.observability.OperationCategory;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -46,6 +48,7 @@ public class SecurityEngine {
         log.info("SecurityEngine initialized with {} rule(s): {}", this.rules.size(), ruleIds());
     }
 
+    @ObservedOperation(value = "security.evaluate", category = OperationCategory.SECURITY_ENGINE)
     public SecurityResult evaluate(SecurityContext context) {
         List<SecurityFinding> findings = rules.stream()
                 .flatMap(rule -> evaluateSafely(rule, context).stream())

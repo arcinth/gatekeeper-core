@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Milestone 9: Observability.
+
+  logging.level.* in application.yml/application-local.yml continues to
+  control per-logger levels exactly as before - Spring Boot applies those
+  properties on top of whatever this file sets, so nothing here needs to
+  duplicate or override them; only output FORMAT is decided here.
+
+  Two output shapes, chosen by profile:
+   - "local": human-readable console text, extended with the correlation id
+     (Milestone 7) so a developer can still eyeball request grouping.
+   - everything else (dev/staging/prod, whatever an operator names it): JSON
+     via logstash-logback-encoder, one object per line, with every MDC key
+     (correlationId, requestId, userId, organizationId - see
+     CorrelationIdFilter/JwtAuthenticationFilter) included automatically, plus
+     a static "service" field - ready for ingestion by any log aggregator
+     (CloudWatch, Loki, ELK, Datadog) without GateKeeper needing to know which.
+     This also keeps the design compatible with a future OpenTelemetry Logback
+     appender (see docs/Observability.md) - JSON output with MDC-carried trace
+     context is exactly what OTel's own logging bridge expects to find.
+-->
+<configuration>
+    <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="gatekeeper-core"/>
+
+    <springProfile name="local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] [%X{correlationId}] %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <springProfile name="!local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <!-- includeContext=false: without it, LogstashEncoder also auto-emits every Logback
+                     context property (i.e. the springProperty above) as its own top-level field,
+                     duplicating "service" below under its raw property name ("serviceName"). -->
+                <includeContext>false</includeContext>
+                <customFields>{"service":"${serviceName}"}</customFields>
+                <includeMdcKeyName>correlationId</includeMdcKeyName>
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>userId</includeMdcKeyName>
+                <includeMdcKeyName>organizationId</includeMdcKeyName>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

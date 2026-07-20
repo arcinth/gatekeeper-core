@@ -6,6 +6,8 @@ import com.gatekeeper.github.GitHubApiClient;
 import com.gatekeeper.github.GitHubAppAuthService;
 import com.gatekeeper.github.dto.GitHubFileChange;
 import com.gatekeeper.github.exception.GitHubApiException;
+import com.gatekeeper.observability.ObservedOperation;
+import com.gatekeeper.observability.OperationCategory;
 import com.gatekeeper.policy.PolicyContext;
 import com.gatekeeper.policy.PolicyEngineService;
 import com.gatekeeper.policy.PolicyResult;
@@ -66,6 +68,7 @@ public class AnalysisExecutionService {
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @ObservedOperation(value = "analysis.pipeline", category = OperationCategory.ANALYSIS_PIPELINE)
     public void onAnalysisRunReady(AnalysisRunReadyForExecutionEvent event) {
         execute(event.analysisRunId());
     }

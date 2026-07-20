@@ -124,6 +124,23 @@ gatekeeper:
     # the governance decision itself.
     ai-wait-timeout-seconds: ${REPORT_AI_WAIT_TIMEOUT_SECONDS:120}
     sweep-interval-ms: ${REPORT_SWEEP_INTERVAL_MS:60000}
+  observability:
+    # Deployment-environment label surfaced by /actuator/info (Milestone 9),
+    # independent of the Spring profile name so an operator can run under any
+    # profile naming scheme and still get a clean Local/Development/Staging/
+    # Production label. Case-insensitive substring match against this value -
+    # see ApplicationInfoContributor.
+    environment: ${DEPLOYMENT_ENVIRONMENT:local}
+    thresholds:
+      # WARN-level "slow operation" thresholds for @ObservedOperation
+      # (Milestone 9: Observability) - tunable per environment without a
+      # redeploy. Defaults reflect each operation category's normal cost, not
+      # an SLA - see docs/Observability.md.
+      github-api-ms: ${OBSERVABILITY_THRESHOLD_GITHUB_API_MS:3000}
+      policy-evaluation-ms: ${OBSERVABILITY_THRESHOLD_POLICY_MS:1000}
+      security-evaluation-ms: ${OBSERVABILITY_THRESHOLD_SECURITY_MS:1000}
+      review-evaluation-ms: ${OBSERVABILITY_THRESHOLD_REVIEW_MS:30000}
+      analysis-pipeline-ms: ${OBSERVABILITY_THRESHOLD_ANALYSIS_MS:5000}
 
 springdoc:
   api-docs:
@@ -133,14 +150,53 @@ springdoc:
     enabled: true
 
 management:
+  server:
+    # Actuator is served on its own port, entirely separate from the public
+    # API (server.port) - the same trust boundary Postgres itself already
+    # relies on in this project (docker-compose never exposes it with
+    # application-level auth either). Nothing on this port requires a JWT;
+    # security is "not reachable from outside the private network," not an
+    # application-layer check (Milestone 9: Observability, ADR - see
+    # docs/Observability.md). Do not publish this port on a public load
+    # balancer/ingress in a real deployment.
+    port: ${MANAGEMENT_SERVER_PORT:8081}
   endpoints:
     web:
+      # Explicit allowlist - env/beans/configprops/mappings/heapdump/threaddump/
+      # shutdown are deliberately never included, in any profile, regardless of
+      # the management port's network isolation (defense in depth).
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus,startup
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+        liveness:
+          include: livenessState
+    startup:
+      enabled: true
+    metrics:
+      access: unrestricted
+    prometheus:
+      access: unrestricted
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    build:
+      enabled: true
+    git:
+      mode: full
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 logging:
   level:
     root: INFO
     com.gatekeeper: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] %logger{36} - %msg%n"

@@ -70,6 +70,8 @@ POST   /api/v1/auth/refresh
 GET    /api/v1/auth/me
 ```
 
+`login` and `refresh` are rate-limited (Milestone 10: Security Hardening) - `login` independently by client IP and by the attempted account email, `refresh` by client IP. Exceeding either returns `429` via the standard error envelope. See [Security-Hardening.md](./Security-Hardening.md) for thresholds.
+
 ---
 
 ## User API
@@ -142,7 +144,7 @@ POST /api/v1/github/installations/{id}/sync
 
 `GET /api/v1/github/installations` lists every known installation (including disconnected ones, so history isn't hidden), each with its lifecycle `status`, `lastSuccessfulSyncAt`, `lastSyncError`, and a denormalized `repositoryCount`. `GET .../installations/{id}` returns one. Both require only `WORKSPACE_READ` - installation visibility is informational, the same transparency posture already given to repositories themselves.
 
-`POST /api/v1/github/installations/{id}/sync` synchronously re-runs the same repository reconciliation (`GET /installation/repositories` &rarr; upsert) that already runs asynchronously after every `installation` webhook - used by the post-install callback page and a manual "Resync now" action, so a user doesn't have to wait on the async webhook round trip to see their repositories appear. Requires `REPOSITORY_MANAGE`.
+`POST /api/v1/github/installations/{id}/sync` synchronously re-runs the same repository reconciliation (`GET /installation/repositories` &rarr; upsert) that already runs asynchronously after every `installation` webhook - used by the post-install callback page and a manual "Resync now" action, so a user doesn't have to wait on the async webhook round trip to see their repositories appear. Requires `REPOSITORY_MANAGE`. Rate-limited per caller (Milestone 10: Security Hardening).
 
 **Lifecycle status.** Each installation carries one of `CONNECTING` (row just created, no sync completed yet), `SYNCING` (a synchronization is in progress right now), `ACTIVE` (last synchronization succeeded), `ERROR` (last synchronization failed - `lastSyncError` holds why), or `DISCONNECTED` (GitHub reported the installation deleted). This is distinct from the existing `active` boolean, which only answers "does this installation still exist on GitHub" - `status` answers the finer-grained "is repository synchronization currently healthy," so a sync failure is visible in the UI instead of silently leaving repositories stale.
 
@@ -162,6 +164,7 @@ POST /api/v1/github/webhook
 
 Responsibilities
 
+- Rate-limit check (Milestone 10: Security Hardening - one global bucket, checked before signature verification so a flood of forged deliveries is rejected before paying the HMAC cost)
 - Verify webhook signature
 - Receive Pull Request events
 - Queue analysis
@@ -370,6 +373,7 @@ Every successful response follows a consistent structure.
 | 404 | Not Found |
 | 409 | Conflict |
 | 422 | Validation Failed |
+| 429 | Too Many Requests (Milestone 10: Security Hardening - see [Security-Hardening.md](./Security-Hardening.md)) |
 | 500 | Internal Server Error |
 
 ---

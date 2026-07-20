@@ -1,0 +1,30 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  gitleaks:
+    name: Gitleaks secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Full history, not just the current commit - Gitleaks scans commit
+          # history by default, and a secret committed once and later removed
+          # is still a leaked secret.
+          fetch-depth: 0
+
+      # Milestone 10: Security Hardening. Runs the Gitleaks CLI directly via its
+      # official Docker image rather than a third-party Action, since Gitleaks
+      # itself (the open-source, MIT-licensed scanner) is free to run this way for
+      # any repository - some Actions wrapping it require a separate license for
+      # organization use, which this avoids entirely.
+      - name: Gitleaks scan
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            detect --source=/repo --redact -v

@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import com.gatekeeper.security.ratelimit.RateLimitExceededException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -178,6 +179,23 @@ public class GlobalExceptionHandler {
                 .body(ApiErrorResponse.of(ErrorCode.GK_404.getCode(), "The requested resource was not found."));
     }
 
+    /**
+     * A dedicated handler (rather than letting {@link #handleApiException} catch this
+     * like any other {@link ApiException}) exists solely to also record a second,
+     * endpoint-tagged counter - Milestone 10: Security Hardening's rate-limit
+     * monitoring wants to distinguish which limit tripped (login-by-ip vs
+     * login-by-account vs webhook, etc.), which {@code gatekeeper.errors.total}'s
+     * fixed category/error_code tags deliberately don't carry.
+     */
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleRateLimitExceeded(RateLimitExceededException ex) {
+        log.warn("rate_limit [{}]: {} exceeded.", ErrorCode.GK_429.getCode(), ex.getEndpoint());
+        recordError("rate_limit", ErrorCode.GK_429.getCode());
+        meterRegistry.counter("gatekeeper.rate_limit.exceeded", "endpoint", ex.getEndpoint()).increment();
+        return ResponseEntity.status(ErrorCode.GK_429.getHttpStatus())
+                .body(ApiErrorResponse.of(ErrorCode.GK_429.getCode(), ex.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnexpectedException(Exception ex) {
         log.error("Unhandled exception", ex);
@@ -192,6 +210,7 @@ public class GlobalExceptionHandler {
             case GK_401 -> "authentication";
             case GK_403 -> "authorization";
             case GK_404, GK_409 -> "business";
+            case GK_429 -> "rate_limit";
             case GK_500 -> "unexpected";
         };
     }

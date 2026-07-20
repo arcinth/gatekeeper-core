@@ -23,6 +23,12 @@ services:
       dockerfile: Dockerfile
     container_name: gatekeeper-backend
     restart: unless-stopped
+    # Milestone 10: Security Hardening - blocks a process inside the container from
+    # gaining privileges beyond what it started with (e.g. via a setuid binary). The
+    # image already runs as a non-root user (see backend/Dockerfile); this closes the
+    # one escalation path that a non-root user alone doesn't.
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         condition: service_healthy

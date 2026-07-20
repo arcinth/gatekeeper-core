@@ -22,6 +22,14 @@ spring:
       pageable:
         max-page-size: 100
         one-indexed-parameters: false
+  servlet:
+    multipart:
+      # No endpoint in this codebase accepts a file upload today - these are a
+      # deliberate, explicit ceiling rather than Spring Boot's implicit default,
+      # so a future multipart endpoint inherits a reviewed limit by default
+      # instead of an unbounded one (Milestone 10: Security Hardening, Section 5).
+      max-file-size: 1MB
+      max-request-size: 1MB
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -32,6 +40,14 @@ server:
   error:
     include-message: always
     include-binding-errors: always
+  tomcat:
+    # Explicit request-size ceilings (Milestone 10: Security Hardening, Section 5) -
+    # each value below matches Tomcat's own current default; made explicit so the
+    # limit is a reviewed, documented decision rather than an implicit default that
+    # could silently change with a future Tomcat upgrade.
+    max-http-request-header-size: 8KB
+    max-swallow-size: 2MB
+    max-http-form-post-size: 2MB
 
 gatekeeper:
   security:
@@ -42,6 +58,33 @@ gatekeeper:
       access-token-ttl-minutes: ${JWT_ACCESS_TTL_MINUTES:15}
       refresh-token-ttl-days: ${JWT_REFRESH_TTL_DAYS:7}
       issuer: gatekeeper-core
+      # Bounded tolerance for clock drift between application instances/NTP when
+      # validating a token's iat/exp (Milestone 10: Security Hardening) - the same
+      # kind of allowance GitHubAppAuthService already applies to GitHub's own App JWTs.
+      clock-skew-seconds: ${JWT_CLOCK_SKEW_SECONDS:30}
+  rate-limit:
+    # In-memory token buckets (Milestone 10: Security Hardening, Section 3) - see
+    # com.gatekeeper.security.ratelimit.RateLimitService. Every threshold below is a
+    # capacity that refills entirely once per refill-period-seconds (a simple, single-
+    # window bucket, not a two-tier burst+sustained shape - see docs/Security-Hardening.md
+    # for why that was simplified for this milestone).
+    login-ip:
+      capacity: ${RATE_LIMIT_LOGIN_IP_CAPACITY:10}
+      refill-period-seconds: ${RATE_LIMIT_LOGIN_IP_REFILL_SECONDS:60}
+    login-account:
+      capacity: ${RATE_LIMIT_LOGIN_ACCOUNT_CAPACITY:5}
+      refill-period-seconds: ${RATE_LIMIT_LOGIN_ACCOUNT_REFILL_SECONDS:60}
+    refresh:
+      capacity: ${RATE_LIMIT_REFRESH_CAPACITY:10}
+      refill-period-seconds: ${RATE_LIMIT_REFRESH_REFILL_SECONDS:60}
+    webhook:
+      capacity: ${RATE_LIMIT_WEBHOOK_CAPACITY:100}
+      refill-period-seconds: ${RATE_LIMIT_WEBHOOK_REFILL_SECONDS:60}
+    repository-sync:
+      capacity: ${RATE_LIMIT_REPOSITORY_SYNC_CAPACITY:5}
+      refill-period-seconds: ${RATE_LIMIT_REPOSITORY_SYNC_REFILL_SECONDS:60}
+    # How often InMemoryRateLimiter evicts fully-refilled (idle) buckets.
+    cleanup-interval-ms: ${RATE_LIMIT_CLEANUP_INTERVAL_MS:300000}
   bootstrap:
     admin:
       email: ${BOOTSTRAP_ADMIN_EMAIL:admin@gatekeeper.local}

@@ -20,6 +20,7 @@ import com.gatekeeper.security.JwtAccessDeniedHandler;
 import com.gatekeeper.security.JwtAuthenticationEntryPoint;
 import com.gatekeeper.security.JwtService;
 import com.gatekeeper.security.SecurityUser;
+import com.gatekeeper.security.ratelimit.RateLimitService;
 import com.gatekeeper.user.User;
 import io.jsonwebtoken.Claims;
 import java.util.List;
@@ -63,6 +64,9 @@ class GitHubInstallationControllerTest {
 
     @MockBean
     private CustomUserDetailsService customUserDetailsService;
+
+    @MockBean
+    private RateLimitService rateLimitService;
 
     @Test
     void findAll_returns401WithoutAJwt() throws Exception {

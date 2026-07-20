@@ -26,6 +26,10 @@ public class BootstrapAdminStartupValidator {
 
     private static final String DEFAULT_BOOTSTRAP_ADMIN_PASSWORD = "ChangeMe123!";
 
+    // A real login credential granting full administrative access (Milestone 10:
+    // Security Hardening) - 12 characters is a common enterprise minimum-length floor.
+    private static final int MINIMUM_PASSWORD_LENGTH = 12;
+
     private final String bootstrapAdminPassword;
 
     public BootstrapAdminStartupValidator(
@@ -41,5 +45,7 @@ public class BootstrapAdminStartupValidator {
                             + "default development value. Set the BOOTSTRAP_ADMIN_PASSWORD environment variable to "
                             + "a unique, securely generated password before starting GateKeeper under 'prod'.");
         }
+        SecretStrengthValidator.requireNotWeak("BOOTSTRAP_ADMIN_PASSWORD", bootstrapAdminPassword);
+        SecretStrengthValidator.requireMinimumLength("BOOTSTRAP_ADMIN_PASSWORD", bootstrapAdminPassword, MINIMUM_PASSWORD_LENGTH);
     }
 }

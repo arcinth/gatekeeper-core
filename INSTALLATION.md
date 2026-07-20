@@ -129,6 +129,7 @@ All variables below are read by the backend (`application.yml`). None are requir
 | `JWT_SECRET` | a committed development value | Signing key for access/refresh tokens. |
 | `JWT_ACCESS_TTL_MINUTES` | `15` | Access token lifetime. |
 | `JWT_REFRESH_TTL_DAYS` | `7` | Refresh token lifetime. |
+| `JWT_CLOCK_SKEW_SECONDS` | `30` | Tolerance for clock drift between instances/NTP when validating a token's issued-at/expiry (Milestone 10: Security Hardening). |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Origins allowed by the CORS filter. |
 
 **Bootstrap administrator**
@@ -189,6 +190,17 @@ All variables below are read by the backend (`application.yml`). None are requir
 | `OBSERVABILITY_THRESHOLD_REVIEW_MS` | `30000` | Slow-call WARN threshold for AI Review Engine evaluation. |
 | `OBSERVABILITY_THRESHOLD_ANALYSIS_MS` | `5000` | Slow-call WARN threshold for the analysis pipeline. |
 
+**Rate limiting** — optional; the defaults are reasonable for local use. See [docs/Security-Hardening.md](docs/Security-Hardening.md) for the full reference.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `RATE_LIMIT_LOGIN_IP_CAPACITY` / `_REFILL_SECONDS` | `10` / `60` | Login attempts allowed per client IP per window. |
+| `RATE_LIMIT_LOGIN_ACCOUNT_CAPACITY` / `_REFILL_SECONDS` | `5` / `60` | Login attempts allowed per account email per window. |
+| `RATE_LIMIT_REFRESH_CAPACITY` / `_REFILL_SECONDS` | `10` / `60` | Refresh attempts allowed per client IP per window. |
+| `RATE_LIMIT_WEBHOOK_CAPACITY` / `_REFILL_SECONDS` | `100` / `60` | GitHub webhook deliveries allowed per window (one global bucket). |
+| `RATE_LIMIT_REPOSITORY_SYNC_CAPACITY` / `_REFILL_SECONDS` | `5` / `60` | Manual repository-sync requests allowed per user per window. |
+| `RATE_LIMIT_CLEANUP_INTERVAL_MS` | `300000` | How often idle (fully-refilled) rate-limit buckets are evicted from memory. |
+
 **Production**
 
 Three startup checks exist only under the `prod` profile — see [Bootstrap Administrator](#bootstrap-administrator) for what they do. There is no separate variable to enable them; they activate automatically when `SPRING_PROFILES_ACTIVE=prod`.
@@ -200,6 +212,8 @@ On every startup, `BootstrapAdminInitializer` checks whether a user with email `
 It only ever creates the account once. If the account already exists — including across restarts against the same database — changing `BOOTSTRAP_ADMIN_PASSWORD` afterward has no effect on it. There's no built-in password reset for this account beyond updating the row directly or using the regular user-management API once you're logged in as an administrator.
 
 Three separate startup validators exist to stop an unrotated default from reaching a real deployment: `JwtSecretStartupValidator`, `GitHubSecretsStartupValidator`, and `BootstrapAdminStartupValidator`. Each is a `@Component` scoped to `@Profile("prod")`, running a `@PostConstruct` check that throws `IllegalStateException` if its corresponding value still matches the one committed in `application.yml`. They don't exist as beans at all under `local` or `dev` — under those profiles, the application boots regardless of what these values are set to.
+
+As of Milestone 10: Security Hardening, each validator also rejects a value that *isn't* the exact default but still looks like a placeholder (contains `changeme`, `placeholder`, `password`, `admin`, `test`, `secret123`, or `default`, case-insensitively), and enforces a minimum length (`JWT_SECRET` 32 characters, `GITHUB_WEBHOOK_SECRET` 20, `BOOTSTRAP_ADMIN_PASSWORD` 12). See [docs/Security-Hardening.md](docs/Security-Hardening.md).
 
 In practice, this means: local development works out of the box with every default in place, but starting the application with `SPRING_PROFILES_ACTIVE=prod` fails immediately, before the application is reachable, unless `JWT_SECRET`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_ID`, `BOOTSTRAP_ADMIN_PASSWORD`, and one of `GITHUB_APP_PRIVATE_KEY`/`GITHUB_APP_PRIVATE_KEY_PATH` have all been changed from their defaults.
 
@@ -279,6 +293,7 @@ There is no automated frontend test suite (no Jest, Vitest, or Playwright config
 | [docs/Database.md](docs/Database.md) | Data model and entity relationships |
 | [docs/API-Design.md](docs/API-Design.md) | REST API conventions and endpoint groups |
 | [docs/Observability.md](docs/Observability.md) | Health endpoints, metrics, structured logging, and the management port |
+| [docs/Security-Hardening.md](docs/Security-Hardening.md) | HTTP security headers, rate limiting, JWT hardening, secrets validation, dependency/secret scanning, Docker hardening |
 | [docs/Product-Backlog.md](docs/Product-Backlog.md) | Epics, features, and the sprint plan the MVP was built against |
 
 ## Development Notes

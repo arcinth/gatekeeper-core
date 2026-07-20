@@ -22,6 +22,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import com.gatekeeper.security.ratelimit.RateLimitExceededException;
 
 /**
  * Verifies each handler both preserves its pre-existing response shape/status
@@ -117,6 +118,21 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody().error().code()).isEqualTo("GK-404");
         assertCounted("business", "GK-404");
+    }
+
+    /** Milestone 10: Security Hardening - also records the dedicated endpoint-tagged rate-limit counter. */
+    @Test
+    void handleRateLimitExceeded_returns429_andRecordsBothTheGeneralAndDedicatedCounters() {
+        RateLimitExceededException ex = new RateLimitExceededException("auth.login.ip");
+
+        ResponseEntity<ApiErrorResponse> response = handler.handleRateLimitExceeded(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getBody().error().code()).isEqualTo("GK-429");
+        assertCounted("rate_limit", "GK-429");
+        var endpointCounter = meterRegistry.find("gatekeeper.rate_limit.exceeded").tag("endpoint", "auth.login.ip").counter();
+        assertThat(endpointCounter).isNotNull();
+        assertThat(endpointCounter.count()).isEqualTo(1.0);
     }
 
     @Test

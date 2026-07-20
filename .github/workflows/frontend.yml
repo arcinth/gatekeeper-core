@@ -28,3 +28,9 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+      # Milestone 10: Security Hardening. --audit-level=high matches the backend's
+      # CVSS >= 7 policy (OWASP Dependency-Check) - see docs/Security-Hardening.md.
+      - name: npm audit
+        working-directory: frontend
+        run: npm audit --audit-level=high

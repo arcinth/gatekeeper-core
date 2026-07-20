@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,6 +16,7 @@ import com.gatekeeper.security.CustomUserDetailsService;
 import com.gatekeeper.security.JwtAccessDeniedHandler;
 import com.gatekeeper.security.JwtAuthenticationEntryPoint;
 import com.gatekeeper.security.JwtService;
+import com.gatekeeper.security.ratelimit.RateLimitService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -57,6 +59,9 @@ class GitHubWebhookControllerTest {
     @MockBean
     private CustomUserDetailsService customUserDetailsService;
 
+    @MockBean
+    private RateLimitService rateLimitService;
+
     @Test
     void receiveWebhook_returns200WhenSignatureVerificationSucceeds() throws Exception {
         mockMvc.perform(post("/api/v1/github/webhook")
@@ -86,6 +91,23 @@ class GitHubWebhookControllerTest {
                 .andExpect(jsonPath("$.error.code").value("GK-401"));
 
         verify(gitHubEventRouter, never()).route(any(), any(byte[].class), any());
+    }
+
+    /** Milestone 10: Security Hardening - checked before signature verification, see GitHubWebhookController. */
+    @Test
+    void receiveWebhook_returns429AndSkipsSignatureVerificationWhenRateLimited() throws Exception {
+        doThrow(new com.gatekeeper.security.ratelimit.RateLimitExceededException("github.webhook"))
+                .when(rateLimitService).checkWebhook();
+
+        mockMvc.perform(post("/api/v1/github/webhook")
+                        .header("X-Hub-Signature-256", "sha256=irrelevant")
+                        .header("X-GitHub-Event", "pull_request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error.code").value("GK-429"));
+
+        verifyNoInteractions(webhookSignatureVerifier, gitHubEventRouter);
     }
 
     @Test

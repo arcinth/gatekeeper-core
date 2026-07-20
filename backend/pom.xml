@@ -27,6 +27,9 @@
         <wiremock.version>3.9.2</wiremock.version>
         <logstash-logback-encoder.version>7.4</logstash-logback-encoder.version>
         <git-commit-id-plugin.version>7.0.0</git-commit-id-plugin.version>
+        <bucket4j.version>8.10.1</bucket4j.version>
+        <dependency-check-maven.version>10.0.4</dependency-check-maven.version>
+        <cyclonedx-maven-plugin.version>2.8.2</cyclonedx-maven-plugin.version>
     </properties>
 
     <dependencies>
@@ -66,6 +69,14 @@
         <dependency>
             <groupId>org.springframework.retry</groupId>
             <artifactId>spring-retry</artifactId>
+        </dependency>
+        <dependency>
+            <!-- In-memory token-bucket rate limiting (Milestone 10: Security Hardening).
+                 Used only behind the RateLimiter abstraction (see com.gatekeeper.security.ratelimit) -
+                 no other class references Bucket4j types directly. -->
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>${bucket4j.version}</version>
         </dependency>
 
         <dependency>
@@ -190,6 +201,35 @@
                         <includeOnlyProperty>^git.branch$</includeOnlyProperty>
                         <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
                     </includeOnlyProperties>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- Milestone 10: Security Hardening. Bound to no phase by default (see
+                     <executions> below being absent) - run explicitly via
+                     `mvn org.owasp:dependency-check-maven:check` in CI (.github/workflows/backend.yml),
+                     not on every local `mvn package`, since a full vulnerability-database
+                     download/refresh is too slow for the everyday local build loop. -->
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>${dependency-check-maven.version}</version>
+                <configuration>
+                    <!-- CVSS >= 7 (High/Critical) fails the build - see docs/Security-Hardening.md. -->
+                    <failBuildOnCVSS>7</failBuildOnCVSS>
+                    <formats>
+                        <format>HTML</format>
+                        <format>JSON</format>
+                    </formats>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- CycloneDX SBOM generation (Milestone 10). Also not bound to a phase -
+                     run explicitly in CI via `mvn org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom`. -->
+                <groupId>org.cyclonedx</groupId>
+                <artifactId>cyclonedx-maven-plugin</artifactId>
+                <version>${cyclonedx-maven-plugin.version}</version>
+                <configuration>
+                    <projectType>application</projectType>
+                    <outputFormat>json</outputFormat>
                 </configuration>
             </plugin>
         </plugins>

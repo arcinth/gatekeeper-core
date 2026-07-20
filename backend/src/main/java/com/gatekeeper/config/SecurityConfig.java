@@ -56,6 +56,15 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 
+    /**
+     * CSP/HSTS/Referrer-Policy/Permissions-Policy (Milestone 10: Security
+     * Hardening, Section 2) are set by {@link SecurityHeadersFilter}, a plain
+     * servlet filter, not through {@code HttpSecurity.headers(...)} - see
+     * that class's Javadoc for why. {@code X-Content-Type-Options},
+     * {@code X-Frame-Options}, and {@code Cache-Control} are already covered
+     * by Spring Security's own default headers and needed no configuration
+     * here at all.
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -74,7 +83,13 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**").permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
+                        // No "/actuator/health" rule here (Milestone 10: Security Hardening
+                        // cleanup): Milestone 9 moved every Actuator endpoint onto a separate
+                        // management port with its own ManagementSecurityConfig - this port
+                        // never serves "/actuator/*" at all (confirmed live: NoResourceFoundException,
+                        // handled as a 404 by GlobalExceptionHandler), so a permitAll rule for
+                        // it here was dead config describing a trust boundary that no longer
+                        // exists. See docs/Observability.md.
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -82,11 +97,20 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * "*" narrowed to the specific headers GateKeeper's own frontend actually
+     * sends (Milestone 10: Security Hardening) - Authorization for the bearer
+     * token, Content-Type for JSON bodies, X-Correlation-Id for the optional
+     * client-supplied tracing header CorrelationIdFilter already accepts.
+     * Defense-in-depth: allowedOrigins is already a specific list (never a
+     * wildcard), so this was not exploitable before, but an explicit allowlist
+     * is stronger practice than "*" even where currently safe.
+     */
     private CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

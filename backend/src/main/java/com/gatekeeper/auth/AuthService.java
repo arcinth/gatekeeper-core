@@ -10,11 +10,13 @@ import io.jsonwebtoken.Claims;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -61,7 +63,23 @@ public class AuthService {
             RefreshToken storedToken = refreshTokenRepository.findByTokenHash(TokenHasher.sha256(jti))
                     .orElseThrow(() -> new InvalidTokenException("Refresh token is unknown or has already been used."));
 
-            if (storedToken.isRevoked() || storedToken.getExpiresAt().isBefore(Instant.now())) {
+            /*
+             * Reuse detection (Milestone 10: Security Hardening): a refresh token
+             * that is already revoked was legitimately consumed once already (by
+             * this same rotation flow, a few lines below) - presenting it again is
+             * the textbook signal of a stolen-and-replayed token, distinct from a
+             * token that simply expired naturally. Logged/counted separately so an
+             * operator can alert on it; the caller still just sees "invalid or
+             * expired" either way, the same response as any other rejected token,
+             * so this doesn't tell an attacker which case they hit.
+             */
+            if (storedToken.isRevoked()) {
+                log.warn("Refresh token reuse detected for user {} - a previously-revoked refresh token was presented again.",
+                        storedToken.getUser().getId());
+                meterRegistry.counter("gatekeeper.security.refresh_token_reuse").increment();
+                throw new InvalidTokenException("Refresh token has expired or was revoked.");
+            }
+            if (storedToken.getExpiresAt().isBefore(Instant.now())) {
                 throw new InvalidTokenException("Refresh token has expired or was revoked.");
             }
 

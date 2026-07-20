@@ -26,16 +26,19 @@ public class JwtService {
     private final String issuer;
     private final long accessTokenTtlMinutes;
     private final long refreshTokenTtlDays;
+    private final long clockSkewSeconds;
 
     public JwtService(
             @Value("${gatekeeper.security.jwt.secret}") String secret,
             @Value("${gatekeeper.security.jwt.issuer}") String issuer,
             @Value("${gatekeeper.security.jwt.access-token-ttl-minutes}") long accessTokenTtlMinutes,
-            @Value("${gatekeeper.security.jwt.refresh-token-ttl-days}") long refreshTokenTtlDays) {
+            @Value("${gatekeeper.security.jwt.refresh-token-ttl-days}") long refreshTokenTtlDays,
+            @Value("${gatekeeper.security.jwt.clock-skew-seconds:30}") long clockSkewSeconds) {
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes());
         this.issuer = issuer;
         this.accessTokenTtlMinutes = accessTokenTtlMinutes;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
+        this.clockSkewSeconds = clockSkewSeconds;
     }
 
     public String generateAccessToken(Long userId, String email, String role, Long organizationId) {
@@ -69,10 +72,22 @@ public class JwtService {
         return new GeneratedRefreshToken(token, jti, expiresAt);
     }
 
+    /**
+     * {@code requireIssuer} (Milestone 10: Security Hardening) rejects a
+     * token whose {@code iss} claim doesn't match this instance's own
+     * configured issuer - every token this service itself mints already
+     * carries the right value, so this only ever rejects a token that came
+     * from somewhere else. {@code setAllowedClockSkewSeconds} gives a small,
+     * bounded tolerance for drift between application instances/NTP, the same
+     * kind of allowance {@code GitHubAppAuthService} already applies to
+     * GitHub's own App JWTs.
+     */
     public Claims parseClaims(String token) {
         try {
             return Jwts.parser()
                     .setSigningKey(signingKey)
+                    .requireIssuer(issuer)
+                    .setAllowedClockSkewSeconds(clockSkewSeconds)
                     .build()
                     .parseClaimsJws(token)
                     .getBody();

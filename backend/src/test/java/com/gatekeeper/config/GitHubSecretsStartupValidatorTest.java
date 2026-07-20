@@ -62,4 +62,19 @@ class GitHubSecretsStartupValidatorTest {
 
         assertThatCode(validator::validate).doesNotThrowAnyException();
     }
+
+    /** Milestone 10: Security Hardening - extends this validator beyond the exact-default check above. */
+    @Test
+    void validate_throwsWhenWebhookSecretContainsAWeakPlaceholderWord() {
+        var validator = new GitHubSecretsStartupValidator("my-test-webhook-secret-value-padding", REAL_PRIVATE_KEY, "", 42L);
+
+        assertThatThrownBy(validator::validate).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void validate_throwsWhenWebhookSecretIsShorterThan20Characters() {
+        var validator = new GitHubSecretsStartupValidator("short-key", REAL_PRIVATE_KEY, "", 42L);
+
+        assertThatThrownBy(validator::validate).isInstanceOf(IllegalStateException.class);
+    }
 }

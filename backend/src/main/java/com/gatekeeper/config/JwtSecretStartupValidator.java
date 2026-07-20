@@ -26,6 +26,12 @@ public class JwtSecretStartupValidator {
         this.jwtSecret = jwtSecret;
     }
 
+    // HS256 requires a key of at least 256 bits (32 bytes); Keys.hmacShaKeyFor already
+    // enforces this at bean-construction time in every profile (see JwtService), but this
+    // makes the requirement an explicit, prod-specific policy rather than an incidental
+    // side effect of that library check (Milestone 10: Security Hardening).
+    private static final int MINIMUM_LENGTH = 32;
+
     @PostConstruct
     public void validate() {
         if (DEFAULT_JWT_SECRET.equals(jwtSecret)) {
@@ -34,5 +40,7 @@ public class JwtSecretStartupValidator {
                             + "development value. Set the JWT_SECRET environment variable to a unique, "
                             + "securely generated secret before starting GateKeeper under 'prod'.");
         }
+        SecretStrengthValidator.requireNotWeak("JWT_SECRET", jwtSecret);
+        SecretStrengthValidator.requireMinimumLength("JWT_SECRET", jwtSecret, MINIMUM_LENGTH);
     }
 }

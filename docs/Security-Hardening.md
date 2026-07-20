@@ -154,6 +154,8 @@ Gitleaks runs via its official Docker image directly (`zricethezav/gitleaks:late
 
 CORS's `allowedHeaders` was narrowed from `"*"` to the specific headers GateKeeper's own frontend actually sends (`Authorization`, `Content-Type`, `X-Correlation-Id`). `allowedOrigins` was already a specific list (never a wildcard), so this wasn't exploitable before - it's defense-in-depth, an explicit allowlist being stronger practice than a wildcard even where currently safe.
 
+**CORS enforcement itself moved out of `HttpSecurity.cors(...)`.** That was the original implementation and, like the header customizers described in Section 1, it built a correctly-configured `CorsFilter` (confirmed via reflection on the built `SecurityFilterChain` - right origins, methods, headers, credentials flag) that nonetheless rejected every real cross-origin preflight with `403` on live verification, regardless of configuration correctness - the same class of failure as Section 1's headers, and likely the same underlying cause. CORS is now handled by a plain `CorsFilter` (Spring's own class, not a custom reimplementation) registered directly via `FilterRegistrationBean` at `Ordered.HIGHEST_PRECEDENCE`, entirely outside Spring Security's filter chain - see `SecurityConfig.corsFilterRegistration()`. This has the added benefit of resolving preflight requests (which never carry credentials) before they reach Spring Security's authorization logic at all, so a preflight to a protected endpoint no longer depends on that endpoint's auth rules.
+
 ---
 
 ## 9. Security Event Monitoring

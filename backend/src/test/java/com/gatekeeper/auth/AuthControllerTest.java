@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -76,6 +77,47 @@ class AuthControllerTest {
                 // response" guarantee Section 2 asked for) - see docs/Security-Hardening.md
                 // for why no extra code was added on top of this default.
                 .andExpect(header().string("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate"));
+    }
+
+    /**
+     * Regression test for the CORS preflight bug found after this milestone
+     * first shipped: {@code CorsFilter} registered through {@code HttpSecurity
+     * .cors(...)} was correctly configured (confirmed live via reflection on
+     * the built {@code SecurityFilterChain}) but rejected every real
+     * cross-origin preflight with {@code 403} anyway - the same class of
+     * failure as the header customizers in {@code SecurityConfig}'s Javadoc.
+     * CORS is now handled by a plain {@code CorsFilter} registered via
+     * {@code FilterRegistrationBean} outside Spring Security's chain (see
+     * {@code SecurityConfig.corsFilterRegistration()}) - this asserts the
+     * preflight this exact bug report was about now succeeds.
+     */
+    @Test
+    void preflight_forLoginFromTheConfiguredFrontendOrigin_succeedsWithoutAuthentication() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/login")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
+
+    /** A preflight to a protected (non-permitAll) endpoint must also succeed - it carries no credentials to check. */
+    @Test
+    void preflight_forAProtectedEndpoint_succeedsWithoutAuthentication() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/me")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
+    }
+
+    @Test
+    void preflight_fromAnUnrecognizedOrigin_isRejected() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/login")
+                        .header("Origin", "http://evil.example.com")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

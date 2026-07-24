@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import axios from 'axios'
+import { ListChecks } from 'lucide-react'
 import { AppLayout } from '../layouts/AppLayout'
-import { LoadingSpinner } from '../components/LoadingSpinner'
-import { Badge } from '../components/ui/Badge'
-import { Button } from '../components/ui/Button'
-import { ErrorState } from '../components/ui/ErrorState'
-import { EmptyTableRow, Table, TableBody, TableHead } from '../components/ui/Table'
-import { SEVERITY_TONES } from '../components/ui/badgeTones'
+import { Surface } from '../components/ui/Surface'
+import { Chip } from '../components/ui/Chip'
+import { Select } from '../components/ui/Field'
+import { EmptyState, ErrorState } from '../components/ui/states'
+import { SkeletonRows } from '../components/ui/Skeleton'
+import { buttonClasses } from '../components/ui/buttonClasses'
+import { humanize, severityTone } from '../components/ui/tones'
 import { policyConfigurationService } from '../services/policyConfigurationService'
 import type { ApiErrorResponse } from '../types/api'
 import type { PolicyConfiguration, PolicySeverity } from '../types/policyConfiguration'
@@ -14,14 +16,15 @@ import type { PolicyConfiguration, PolicySeverity } from '../types/policyConfigu
 const SEVERITY_OPTIONS: PolicySeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
 
 /**
- * Organization-scoped policy configuration (Milestone 6). Every role can see
- * this page (WORKSPACE_READ); only POLICY_MANAGE can change anything - the
- * frontend does not pre-compute who that is (permissions aren't exposed to
- * the client, and duplicating RolePermissions' mapping here would be exactly
- * the kind of role-name duplication Milestone 5/6 exist to prevent). A
- * caller without POLICY_MANAGE simply sees a 403 surfaced as an error
- * message when they attempt a change - the same posture already agreed for
- * Milestone 5's own review-decision form.
+ * Organization-scoped policy configuration. Behavior is unchanged from before
+ * the redesign: every role can view; only POLICY_MANAGE can change anything,
+ * and the frontend still does not pre-compute who that is - a caller without
+ * the permission sees the backend's 403 surfaced as a message, rather than
+ * this page duplicating RolePermissions' mapping.
+ *
+ * What changed is presentation (Product Experience spec, §07): each rule is a
+ * readable card stating what it catches and whether it is overridden, instead
+ * of a dense six-column table with a severity <select> styled as a badge.
  */
 export function PolicyManagementPage() {
   const [policies, setPolicies] = useState<PolicyConfiguration[]>([])
@@ -29,38 +32,21 @@ export function PolicyManagementPage() {
   const [error, setError] = useState<string | null>(null)
   const [savingRuleId, setSavingRuleId] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadPolicies()
-  }, [])
-
-  function loadPolicies() {
+  const loadPolicies = useCallback(async () => {
     setIsLoading(true)
     setError(null)
-    policyConfigurationService
-      .list()
-      .then(setPolicies)
-      .catch(() => setError('Failed to load policy configuration.'))
-      .finally(() => setIsLoading(false))
-  }
+    try {
+      setPolicies(await policyConfigurationService.list())
+    } catch {
+      setError('Failed to load policy configuration.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
-  async function toggleEnabled(policy: PolicyConfiguration) {
-    await runUpdate(policy.ruleId, () =>
-      policyConfigurationService.update(policy.ruleId, {
-        enabled: !policy.enabled,
-        severityOverride: policy.overridden ? policy.severity : undefined,
-      }),
-    )
-  }
-
-  async function changeSeverity(policy: PolicyConfiguration, severity: PolicySeverity) {
-    await runUpdate(policy.ruleId, () =>
-      policyConfigurationService.update(policy.ruleId, { enabled: policy.enabled, severityOverride: severity }),
-    )
-  }
-
-  async function resetToDefault(policy: PolicyConfiguration) {
-    await runUpdate(policy.ruleId, () => policyConfigurationService.resetToDefault(policy.ruleId))
-  }
+  useEffect(() => {
+    void loadPolicies()
+  }, [loadPolicies])
 
   async function runUpdate(ruleId: string, action: () => Promise<PolicyConfiguration>) {
     setError(null)
@@ -75,82 +61,120 @@ export function PolicyManagementPage() {
     }
   }
 
+  const enabledCount = policies.filter((policy) => policy.enabled).length
+
   return (
     <AppLayout
-      title="Policy Management"
-      description="Enable, disable, or override the severity of each policy rule for your organization. Rule definitions themselves are fixed by GateKeeper; only their configuration is organization-specific."
+      eyebrow="Configuration"
+      title="Policies"
+      description="Enable, disable, or override the severity of each policy rule for your organization. Rule definitions are fixed by GateKeeper; only their configuration is yours."
+      actions={
+        !isLoading && policies.length > 0 ? (
+          <span className="tabular font-mono text-[11px] text-faint">
+            {enabledCount} of {policies.length} enabled
+          </span>
+        ) : undefined
+      }
     >
-      {error && <ErrorState message={error} />}
+      {error && <ErrorState message={error} onRetry={() => void loadPolicies()} className="mb-5" />}
 
       {isLoading ? (
-        <LoadingSpinner />
+        <SkeletonRows rows={4} />
+      ) : policies.length === 0 ? (
+        <EmptyState
+          icon={ListChecks}
+          title="No policy rules discovered"
+          description="GateKeeper found no policy rules registered in this deployment."
+        />
       ) : (
-        <Table>
-          <TableHead>
-            <tr>
-              <th className="px-4 py-2">Rule</th>
-              <th className="px-4 py-2">Category</th>
-              <th className="px-4 py-2">Description</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Severity</th>
-              <th className="px-4 py-2"></th>
-            </tr>
-          </TableHead>
-          <TableBody>
-            {policies.length ? (
-              policies.map((policy) => (
-                <tr key={policy.ruleId} className="hover:bg-slate-50">
-                  <td className="px-4 py-2 font-medium text-slate-900">{policy.ruleId}</td>
-                  <td className="px-4 py-2 text-slate-500">{policy.defaultCategory}</td>
-                  <td className="px-4 py-2 text-slate-700">{policy.description}</td>
-                  <td className="px-4 py-2">
-                    <Badge tone={policy.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}>
-                      {policy.enabled ? 'Enabled' : 'Disabled'}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2">
-                    <select
-                      value={policy.severity}
-                      disabled={savingRuleId === policy.ruleId}
-                      onChange={(event) => void changeSeverity(policy, event.target.value as PolicySeverity)}
-                      className={`rounded-full border-0 px-2 py-0.5 text-xs font-medium ${SEVERITY_TONES[policy.severity]}`}
-                    >
-                      {SEVERITY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={savingRuleId === policy.ruleId}
-                        onClick={() => void toggleEnabled(policy)}
-                      >
-                        {policy.enabled ? 'Disable' : 'Enable'}
-                      </Button>
+        <div className="flex flex-col gap-3">
+          {policies.map((policy) => {
+            const isSaving = savingRuleId === policy.ruleId
+            return (
+              <Surface key={policy.ruleId} padding="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-semibold text-content">{policy.ruleId}</span>
+                      <Chip tone={policy.enabled ? 'pass' : 'neutral'} size="sm">
+                        {policy.enabled ? 'Enabled' : 'Disabled'}
+                      </Chip>
                       {policy.overridden && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={savingRuleId === policy.ruleId}
-                          onClick={() => void resetToDefault(policy)}
-                        >
-                          Reset to default
-                        </Button>
+                        <Chip tone="accent" size="sm">
+                          Overridden
+                        </Chip>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <EmptyTableRow colSpan={6}>No policy rules discovered.</EmptyTableRow>
-            )}
-          </TableBody>
-        </Table>
+                    <p className="mt-2 text-sm text-muted">{policy.description}</p>
+                    <p className="mt-1.5 font-mono text-[11px] text-faint">
+                      {humanize(policy.defaultCategory)} · defaults to {policy.defaultSeverity}
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <div className="w-32">
+                      <Select
+                        aria-label={`Severity for ${policy.ruleId}`}
+                        value={policy.severity}
+                        disabled={isSaving}
+                        onChange={(event) =>
+                          void runUpdate(policy.ruleId, () =>
+                            policyConfigurationService.update(policy.ruleId, {
+                              enabled: policy.enabled,
+                              severityOverride: event.target.value as PolicySeverity,
+                            }),
+                          )
+                        }
+                      >
+                        {SEVERITY_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={buttonClasses('secondary', 'md')}
+                      disabled={isSaving}
+                      onClick={() =>
+                        void runUpdate(policy.ruleId, () =>
+                          policyConfigurationService.update(policy.ruleId, {
+                            enabled: !policy.enabled,
+                            severityOverride: policy.overridden ? policy.severity : undefined,
+                          }),
+                        )
+                      }
+                    >
+                      {policy.enabled ? 'Disable' : 'Enable'}
+                    </button>
+
+                    {policy.overridden && (
+                      <button
+                        type="button"
+                        className={buttonClasses('ghost', 'md')}
+                        disabled={isSaving}
+                        onClick={() =>
+                          void runUpdate(policy.ruleId, () => policyConfigurationService.resetToDefault(policy.ruleId))
+                        }
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2 border-t border-line-soft pt-3">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-faint">Effective severity</span>
+                  <Chip tone={severityTone(policy.severity)} size="sm">
+                    {policy.severity}
+                  </Chip>
+                </div>
+              </Surface>
+            )
+          })}
+        </div>
       )}
     </AppLayout>
   )

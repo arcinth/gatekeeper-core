@@ -4,14 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.metrics.buffering.BufferingApplicationStartup;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -29,10 +34,43 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * it exists primarily for CI. The equivalent behavior was also verified
  * manually against the real running application during development (see
  * Milestone 9 deliverables report).
+ * <p>
+ * Two annotations restore behavior {@code @SpringBootTest} otherwise strips,
+ * neither a production concern - both endpoints work correctly against the
+ * real, {@code main()}-booted application (verified live):
+ * <ul>
+ * <li>{@code @AutoConfigureObservability} - Spring Boot Test disables metrics
+ * export by default for every {@code @SpringBootTest} (its own
+ * {@code DisableObservabilityContextCustomizer}, effectively
+ * {@code management.defaults.metrics.export.enabled=false}), which silently
+ * 404s {@code /actuator/prometheus} - confirmed via Spring's own conditions
+ * report ({@code -Ddebug}): {@code PrometheusMetricsExportAutoConfiguration}
+ * "Did not match: @ConditionalOnEnabledMetricsExport ... is considered
+ * false". This annotation is Spring Boot's own documented way to opt back in.
+ * <li>{@link StartupInitializer} - {@code /actuator/startup} requires a
+ * {@link BufferingApplicationStartup} to be set on the context before
+ * refresh; {@link com.gatekeeper.GateKeeperApplication#main} sets one, but
+ * {@code @SpringBootTest} never calls {@code main()}, leaving the default
+ * no-op {@code ApplicationStartup} in place - confirmed the same way
+ * ({@code StartupEndpointAutoConfiguration.ApplicationStartupCondition}
+ * "expected BufferingApplicationStartup"). An
+ * {@code ApplicationContextInitializer} is the only hook that runs early
+ * enough to set it before the context this endpoint's auto-configuration
+ * inspects has refreshed.
+ * </ul>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureObservability
+@ContextConfiguration(initializers = ObservabilityIntegrationTest.StartupInitializer.class)
 @Testcontainers
 class ObservabilityIntegrationTest {
+
+    static class StartupInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+        @Override
+        public void initialize(ConfigurableApplicationContext applicationContext) {
+            applicationContext.setApplicationStartup(new BufferingApplicationStartup(2048));
+        }
+    }
 
     private static final int MANAGEMENT_PORT = 18089;
 

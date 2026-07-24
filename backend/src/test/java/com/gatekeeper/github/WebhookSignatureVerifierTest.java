@@ -75,6 +75,30 @@ class WebhookSignatureVerifierTest {
         assertThatCode(() -> verifier.verify(emptyBody, sign(emptyBody, SECRET))).doesNotThrowAnyException();
     }
 
+    @Test
+    void verify_stillAcceptsAValidSignatureWhenTheConfiguredSecretHasATrailingNewline() {
+        // A secret read from a .env file or shell export commonly picks up a
+        // trailing newline - the verifier must sanitize its own configured
+        // secret to the same value GitHub was actually given, not fail every
+        // delivery because of whitespace neither side intended.
+        WebhookSignatureVerifier verifierWithPollutedSecret =
+                new WebhookSignatureVerifier(SECRET + "\n", new SimpleMeterRegistry());
+        byte[] body = "{\"action\":\"opened\"}".getBytes(StandardCharsets.UTF_8);
+
+        assertThatCode(() -> verifierWithPollutedSecret.verify(body, sign(body, SECRET)))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void verify_stillAcceptsAValidSignatureWhenTheConfiguredSecretHasALeadingByteOrderMark() {
+        WebhookSignatureVerifier verifierWithPollutedSecret =
+                new WebhookSignatureVerifier("﻿" + SECRET, new SimpleMeterRegistry());
+        byte[] body = "{\"action\":\"opened\"}".getBytes(StandardCharsets.UTF_8);
+
+        assertThatCode(() -> verifierWithPollutedSecret.verify(body, sign(body, SECRET)))
+                .doesNotThrowAnyException();
+    }
+
     private static String sign(byte[] body, String secret) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");

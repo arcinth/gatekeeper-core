@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.gatekeeper.config.SecurityConfig;
 import com.gatekeeper.exception.ResourceNotFoundException;
+import com.gatekeeper.pullrequest.PullRequestStatus;
 import com.gatekeeper.securityengine.SecurityCategory;
 import com.gatekeeper.securityengine.SecuritySeverity;
 import com.gatekeeper.securityfinding.dto.SecurityFindingResponse;
@@ -57,9 +58,9 @@ class SecurityFindingControllerTest {
     @Test
     void findAll_returnsThePagedResultWhenAuthenticated() throws Exception {
         authenticateAs("dev@example.com");
-        SecurityFindingResponse finding = new SecurityFindingResponse(1L, 9L, "org/core", 21, "sha", "HARDCODED_SECRET",
-                SecurityCategory.SECRETS_EXPOSURE, SecuritySeverity.CRITICAL, "src/Config.java", 1,
-                "Possible hardcoded secret found", "Remove the literal value.", Instant.now());
+        SecurityFindingResponse finding = new SecurityFindingResponse(1L, 9L, "org/core", 21, PullRequestStatus.OPEN,
+                "sha", "HARDCODED_SECRET", SecurityCategory.SECRETS_EXPOSURE, SecuritySeverity.CRITICAL,
+                "src/Config.java", 1, "Possible hardcoded secret found", "Remove the literal value.", Instant.now());
         Page<SecurityFindingResponse> page = new PageImpl<>(List.of(finding), PageRequest.of(0, 20), 1);
         when(securityFindingQueryService.findPage(any(), any())).thenReturn(page);
 

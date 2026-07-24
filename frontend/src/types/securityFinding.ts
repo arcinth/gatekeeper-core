@@ -1,3 +1,5 @@
+import type { PullRequestStatus } from './analysisRun'
+
 export type SecuritySeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type SecurityCategory = 'SECRETS_EXPOSURE' | 'INSECURE_CRYPTOGRAPHY'
 
@@ -6,6 +8,7 @@ export interface SecurityFinding {
   analysisRunId: number
   repositoryFullName: string
   pullRequestNumber: number
+  pullRequestStatus: PullRequestStatus
   commitSha: string
   ruleId: string
   category: SecurityCategory
@@ -26,4 +29,5 @@ export interface SecurityFindingFilters {
   page?: number
   size?: number
   sort?: string
+  currentOnly?: boolean
 }

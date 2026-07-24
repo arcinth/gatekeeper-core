@@ -77,7 +77,7 @@ class SecurityFindingQueryServiceTest {
     }
 
     private SecurityFindingFilter emptyFilter() {
-        return new SecurityFindingFilter(null, null, null, null, null, null, null);
+        return new SecurityFindingFilter(null, null, null, null, null, null, null, false);
     }
 
     private SecurityFindingEntity findingWithContext(Long id, String ruleId, SecuritySeverity severity) {

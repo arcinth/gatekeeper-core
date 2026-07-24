@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.gatekeeper.analysisrun.AnalysisRun;
+import com.gatekeeper.pullrequest.PullRequestStatus;
 import com.gatekeeper.securityengine.SecurityCategory;
 import com.gatekeeper.securityengine.SecuritySeverity;
 import com.gatekeeper.securityfinding.dto.SecurityFindingFilter;
@@ -18,6 +20,7 @@ import jakarta.persistence.criteria.Fetch;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Sort;
@@ -129,6 +132,54 @@ class SecurityFindingSpecificationsTest {
     }
 
     @Test
+    void currentOnly_returnsNullPredicateWhenDisabled() {
+        assertThat(SecurityFindingSpecifications.currentOnly(false).toPredicate(root, query, builder)).isNull();
+        verifyNoInteractions(builder);
+    }
+
+    @Test
+    void currentOnly_restrictsToTheLatestRunForTheSamePullRequestAndAnOpenPullRequest() {
+        Path<Object> analysisRunPath = mock(Path.class);
+        Path<Object> pullRequestPath = mock(Path.class);
+        Path<Object> pullRequestIdPath = mock(Path.class);
+        Path<Object> analysisRunIdPath = mock(Path.class);
+        Path<Object> statusPath = mock(Path.class);
+        when(root.get("analysisRun")).thenReturn(analysisRunPath);
+        when(analysisRunPath.get("pullRequest")).thenReturn(pullRequestPath);
+        when(pullRequestPath.get("id")).thenReturn(pullRequestIdPath);
+        when(analysisRunPath.get("id")).thenReturn(analysisRunIdPath);
+        when(pullRequestPath.get("status")).thenReturn(statusPath);
+
+        Subquery<Long> subquery = mock(Subquery.class);
+        Root<AnalysisRun> subqueryRoot = mock(Root.class);
+        Path<Object> subqueryPullRequestPath = mock(Path.class);
+        Path<Object> subqueryPullRequestIdPath = mock(Path.class);
+        Path<Long> subqueryRunIdPath = mock(Path.class);
+        when(query.subquery(Long.class)).thenReturn(subquery);
+        when(subquery.from(AnalysisRun.class)).thenReturn(subqueryRoot);
+        when(subqueryRoot.get("pullRequest")).thenReturn(subqueryPullRequestPath);
+        when(subqueryPullRequestPath.get("id")).thenReturn(subqueryPullRequestIdPath);
+        when(subqueryRoot.<Long>get("id")).thenReturn(subqueryRunIdPath);
+        Expression<Long> maxExpression = mock(Expression.class);
+        when(builder.max(subqueryRunIdPath)).thenReturn(maxExpression);
+        when(subquery.select(maxExpression)).thenReturn(subquery);
+        Predicate correlation = mock(Predicate.class);
+        when(builder.equal(subqueryPullRequestIdPath, pullRequestIdPath)).thenReturn(correlation);
+        when(subquery.where(correlation)).thenReturn(subquery);
+
+        Predicate isLatestRun = mock(Predicate.class);
+        when(builder.equal(analysisRunIdPath, subquery)).thenReturn(isLatestRun);
+        Predicate isOpen = mock(Predicate.class);
+        when(builder.equal(statusPath, PullRequestStatus.OPEN)).thenReturn(isOpen);
+        Predicate combined = mock(Predicate.class);
+        when(builder.and(isLatestRun, isOpen)).thenReturn(combined);
+
+        Predicate predicate = SecurityFindingSpecifications.currentOnly(true).toPredicate(root, query, builder);
+
+        assertThat(predicate).isSameAs(combined);
+    }
+
+    @Test
     void createdFrom_returnsNullPredicateWhenNull() {
         assertThat(SecurityFindingSpecifications.createdFrom(null).toPredicate(root, query, builder)).isNull();
     }
@@ -168,7 +219,7 @@ class SecurityFindingSpecificationsTest {
         when(builder.conjunction()).thenReturn(mock(Predicate.class));
         when(builder.and(any(), any())).thenReturn(mock(Predicate.class));
         SecurityFindingFilter filter = new SecurityFindingFilter(1L, 2L, SecuritySeverity.HIGH,
-                SecurityCategory.INSECURE_CRYPTOGRAPHY, "HARDCODED_SECRET", Instant.EPOCH, Instant.now());
+                SecurityCategory.INSECURE_CRYPTOGRAPHY, "HARDCODED_SECRET", Instant.EPOCH, Instant.now(), false);
 
         org.springframework.data.jpa.domain.Specification<SecurityFindingEntity> spec =
                 SecurityFindingSpecifications.matching(filter);

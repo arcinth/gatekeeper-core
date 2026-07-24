@@ -1,10 +1,14 @@
 package com.gatekeeper.securityfinding;
 
+import com.gatekeeper.analysisrun.AnalysisRun;
+import com.gatekeeper.pullrequest.PullRequestStatus;
 import com.gatekeeper.securityengine.SecurityCategory;
 import com.gatekeeper.securityengine.SecuritySeverity;
 import com.gatekeeper.securityfinding.dto.SecurityFindingFilter;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import java.time.Instant;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -72,6 +76,36 @@ public final class SecurityFindingSpecifications {
         return (root, query, builder) -> to == null ? null : builder.lessThanOrEqualTo(root.get("createdAt"), to);
     }
 
+    /**
+     * Restricts the triage queue to findings that are still actionable "right
+     * now": the finding's analysis run must be the most recent run recorded
+     * for its pull request (a later commit that fixed the finding produces a
+     * new run and leaves the old finding row in place, otherwise), and the
+     * pull request itself must still be OPEN (a merged or closed pull request
+     * has nothing left to triage). Without this, a finding from a superseded
+     * commit or a since-merged pull request stays visible on the triage queue
+     * indefinitely, even though the pull request's current verdict may no
+     * longer reflect it - the exact "governance engine contradicting itself"
+     * gap this filter closes.
+     */
+    static Specification<SecurityFindingEntity> currentOnly(boolean currentOnly) {
+        return (root, query, builder) -> {
+            if (!currentOnly) {
+                return null;
+            }
+            Subquery<Long> latestRunIdForPullRequest = query.subquery(Long.class);
+            Root<AnalysisRun> latestRunRoot = latestRunIdForPullRequest.from(AnalysisRun.class);
+            latestRunIdForPullRequest
+                    .select(builder.max(latestRunRoot.get("id")))
+                    .where(builder.equal(
+                            latestRunRoot.get("pullRequest").get("id"),
+                            root.get("analysisRun").get("pullRequest").get("id")));
+            return builder.and(
+                    builder.equal(root.get("analysisRun").get("id"), latestRunIdForPullRequest),
+                    builder.equal(root.get("analysisRun").get("pullRequest").get("status"), PullRequestStatus.OPEN));
+        };
+    }
+
     public static Specification<SecurityFindingEntity> matching(SecurityFindingFilter filter) {
         return Specification.where(withFetchedAssociations())
                 .and(hasAnalysisRunId(filter.analysisRunId()))
@@ -80,7 +114,8 @@ public final class SecurityFindingSpecifications {
                 .and(hasCategory(filter.category()))
                 .and(hasRuleId(filter.ruleId()))
                 .and(createdFrom(filter.from()))
-                .and(createdTo(filter.to()));
+                .and(createdTo(filter.to()))
+                .and(currentOnly(filter.currentOnly()));
     }
 
     /**

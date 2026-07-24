@@ -39,9 +39,10 @@ public class SecurityFindingController {
             @RequestParam(required = false) String ruleId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @RequestParam(defaultValue = "true") boolean currentOnly,
             @PageableDefault(size = 20, sort = "createdAt", direction = Direction.DESC) Pageable pageable) {
         SecurityFindingFilter filter =
-                new SecurityFindingFilter(analysisRunId, repositoryId, severity, category, ruleId, from, to);
+                new SecurityFindingFilter(analysisRunId, repositoryId, severity, category, ruleId, from, to, currentOnly);
         return ApiResponse.ok(PageResponse.from(securityFindingQueryService.findPage(filter, pageable)));
     }
 

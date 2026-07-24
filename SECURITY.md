@@ -31,7 +31,15 @@ When reporting, include:
 
 **GitHub webhook signature verification.** Inbound webhook requests are verified against the `X-Hub-Signature-256` header using HMAC-SHA256 over the raw request body (`WebhookSignatureVerifier`), with a constant-time comparison (`MessageDigest.isEqual`) to avoid leaking signature information through timing. Requests with a missing, malformed, or mismatched signature are rejected before any payload processing happens.
 
-**Startup validators.** Three configuration values that are dangerous if left at their committed development defaults are checked at startup under the `prod` Spring profile: `JwtSecretStartupValidator` (JWT signing secret), `GitHubSecretsStartupValidator` (webhook secret, GitHub App ID, and private key), and `BootstrapAdminStartupValidator` (bootstrap administrator password). Each throws `IllegalStateException` during startup if its value still matches the known default, preventing the application from starting at all rather than starting in an insecure state. None of these beans exist under the `local` or `dev` profiles — they have no effect outside `prod`.
+**Rate limiting.** Login, refresh, webhook delivery, and repository sync are rate-limited (`RateLimitService`, Bucket4j-backed, in-memory per instance — see `docs/Security-Hardening.md` for the documented Redis-backed upgrade path for multi-instance deployments). Login specifically uses two *independent* buckets, checked by IP and by account: an attacker distributing attempts across many IPs still hits the account bucket, and one IP attacking many accounts still hits the IP bucket. A request over the limit is rejected with `429` before any password check runs.
+
+**Startup validators.** Three configuration values that are dangerous if left at their committed development defaults are checked at startup under the `prod` Spring profile: `JwtSecretStartupValidator` (JWT signing secret), `GitHubSecretsStartupValidator` (webhook secret, GitHub App ID, and private key), and `BootstrapAdminStartupValidator` (bootstrap administrator password). Each throws `IllegalStateException` during startup if its value still matches the known default, preventing the application from starting at all rather than starting in an insecure state. Beyond the exact-default check, each of these three also runs `SecretStrengthValidator` — a blocklist of placeholder-like values (`changeme`, `placeholder`, `password`, `admin`, `test`, `secret123`, `default`, case-insensitive) and a minimum length, so a value that merely *resembles* a real secret without being one is also rejected. None of these three beans exist under the `local` or `dev` profiles — they have no effect outside `prod`.
+
+**GitHub App configuration diagnostics.** Separately, and on *every* profile (not just `prod`): `GitHubAppConfigurationDiagnostics` logs, once at startup, exactly which required GitHub App property is present or missing (never the values themselves — only presence and, for the webhook secret, its length), and refuses to start if a real `GITHUB_APP_ID` is configured against a webhook secret still at its committed placeholder default — a state that would otherwise fail every webhook signature check silently.
+
+**HTTP security headers.** `Content-Security-Policy` (`default-src 'none'; frame-ancestors 'none'`), `Referrer-Policy` (`no-referrer`), and `Permissions-Policy` (`geolocation=(), camera=(), microphone=()`) are set on every response; `Strict-Transport-Security` is set when the request is secure. Applied via a plain `OncePerRequestFilter` (`SecurityHeadersFilter`) registered as a normal Spring bean rather than through Spring Security's `HttpSecurity.headers()` DSL — the DSL approach was verified (via `@WebMvcTest` and reflection on the built filter chain) to be correctly configured yet did not reliably reach a live Tomcat instance in this environment; the plain-filter pattern is the one this project trusts. CORS is applied the same way, via a `FilterRegistrationBean<CorsFilter>` at `Ordered.HIGHEST_PRECEDENCE`, ahead of Spring Security's own chain.
+
+**Refresh token reuse detection.** `AuthService.refresh` distinguishes a revoked-but-resubmitted refresh token (the textbook signal of a stolen token) from an ordinarily expired one — the former is logged at `WARN` and counted (`gatekeeper.security.refresh_token_reuse`) separately, without changing the error message returned to the caller, so the distinction isn't observable from the response itself.
 
 **Bootstrap administrator protection.** `BootstrapAdminInitializer` creates a single administrator account on first startup against an empty database, so there's a way to log in and create further users. It never resets the account's password on subsequent restarts, and — under `prod` — `BootstrapAdminStartupValidator` refuses to start the application at all if the password is still the committed default.
 
@@ -50,6 +58,7 @@ Before running GateKeeper with `SPRING_PROFILES_ACTIVE=prod`, the following must
 - `BOOTSTRAP_ADMIN_PASSWORD` — must differ from the committed default (`ChangeMe123!`).
 - `JWT_SECRET` — must differ from the committed default development value.
 - `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` — `GitHubSecretsStartupValidator` requires all three to be present and non-default under `prod`, even if you don't plan to use GitHub integration immediately.
+- `GITHUB_APP_SLUG` — required for the "Connect GitHub" install link to work at all, but *not* part of the hard-fail set above; a missing value only produces a startup warning (`GitHubAppConfigurationDiagnostics`), not a refusal to start. Set it deliberately rather than relying on that check to catch its absence.
 
 Two values have no dedicated startup check and should still be set deliberately:
 
@@ -63,8 +72,8 @@ Swagger UI and the OpenAPI JSON endpoint are unavailable under `prod` by design 
 These are current, verified limitations — not hypothetical concerns:
 
 - Access and refresh tokens are stored in the browser's `localStorage` (`frontend/src/services/tokenStorage.ts`), which is readable by any JavaScript running on the page. An XSS vulnerability elsewhere in the frontend would be able to read both tokens.
-- There is no login rate limiting. The `/api/v1/auth/**` endpoints accept requests without any throttling, so repeated login attempts against a known email are not slowed down or blocked by the backend.
-- There is no account lockout after repeated failed login attempts.
+- Login is rate-limited (see above), but there is no account lockout after repeated failed attempts — a request that stays under the rate limit is still evaluated normally, however many times it's been tried before.
+- Rate limiting is in-memory and per application instance. It resets on restart and does not coordinate across multiple instances behind a load balancer; a documented Redis-backed implementation would close this for a horizontally-scaled deployment, but it isn't built (see `docs/Security-Hardening.md`).
 - Frontend role gating (which admin pages and actions a user sees) is a UI convenience only. All real enforcement happens on the backend via `@PreAuthorize`; the frontend does not need to be trusted for authorization to hold.
 
 ## Third-party Services
@@ -79,7 +88,7 @@ These are current, verified limitations — not hypothetical concerns:
 
 ## Dependency Updates
 
-Keep backend (Maven, `backend/pom.xml`) and frontend (npm, `frontend/package.json`) dependencies current, particularly Spring Security, Spring Boot, and the JWT library (`io.jsonwebtoken`). The project does not currently have automated dependency vulnerability scanning (no Dependabot configuration, no Snyk or equivalent) configured in the repository.
+Keep backend (Maven, `backend/pom.xml`) and frontend (npm, `frontend/package.json`) dependencies current, particularly Spring Security, Spring Boot, and the JWT library (`io.jsonwebtoken`). CI (`.github/workflows/`) runs OWASP Dependency Check and generates a CycloneDX SBOM on the backend, `npm audit` on the frontend, and Gitleaks (secret scanning, via direct Docker image invocation rather than a wrapper Action, to avoid organization-use licensing requirements) across the whole repository on every push. There is no Dependabot or equivalent auto-upgrade configuration — CI catches known-vulnerable dependencies, but upgrading them is still a manual step.
 
 ## License
 

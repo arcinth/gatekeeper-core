@@ -2,7 +2,7 @@
 
 This document walks through setting up GateKeeper for local development: cloning the repository, starting PostgreSQL, running the backend and frontend, and the environment variables that control each part of the system.
 
-For a general overview of what GateKeeper does, see [README.md](README.md). For the system design behind these components, see the documents linked at the end of this guide.
+For a general overview of what GateKeeper does, see [README.md](README.md). For the system design behind these components, see the documents linked at the end of this guide. Once set up, day-to-day startup is faster with `start-dev.ps1`/`.sh`/`.bat` — one command for Postgres, backend, and frontend together — see [docs/Development.md](docs/Development.md); this guide covers the manual, piece-by-piece setup those scripts automate.
 
 ## Prerequisites
 
@@ -93,7 +93,7 @@ The backend's configuration lives in `backend/src/main/resources/application.yml
 
 Every configurable value in `application.yml` is written as `${ENV_VAR:default}` — standard Spring property placeholder syntax. That means an actual environment variable always overrides the committed default, and nothing needs to change in the YAML itself to reconfigure a deployment.
 
-One thing this project does *not* do: the backend does not read a `.env` file directly. `.env` (and `.env.example`) only feed `docker-compose.yml`'s own variable substitution. If you run `./mvnw spring-boot:run` or `java -jar` outside of `docker compose`, environment variables need to come from your shell, your IDE's run configuration, or `export`/`set` — not from a `.env` file sitting in the repository root.
+The backend itself does not read a `.env` file directly — Spring Boot only ever sees actual environment variables. `.env` (and `.env.example`) feed `docker-compose.yml`'s own variable substitution automatically. If you run `./mvnw spring-boot:run` or `java -jar` directly (outside `docker compose`), use [start-dev.ps1/.sh](docs/Development.md) — it loads `.env` from the repository root and exports it into the backend process's environment before launching, so the same `.env` file is the single source of truth either way. Running `./mvnw spring-boot:run` by hand, or via an IDE run configuration, still bypasses `.env`; set variables through your shell, `export`/`set`, or the IDE's own run configuration in that case.
 
 ## Frontend Setup
 
@@ -144,6 +144,7 @@ All variables below are read by the backend (`application.yml`). None are requir
 | Variable | Default | Purpose |
 |---|---|---|
 | `GITHUB_APP_ID` | `0` (treated as unset) | GitHub App ID. |
+| `GITHUB_APP_SLUG` | empty | The App's public URL slug — the `gatekeeper-core` in `https://github.com/apps/gatekeeper-core`, found on the App's settings page. Only used to build the "Connect GitHub" install link; **the Repositories page reports "The GitHub App is not configured" until this is set**, even if `GITHUB_APP_ID` and the private key are already correct. |
 | `GITHUB_APP_PRIVATE_KEY` | empty | GitHub App private key, PKCS#8 PEM format, as the raw PEM content. GitHub issues PKCS#1 by default — convert with `openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in <downloaded-key>.pem -out <pkcs8-key>.pem`. |
 | `GITHUB_APP_PRIVATE_KEY_PATH` | empty | Path to a PEM file on disk, as an alternative to `GITHUB_APP_PRIVATE_KEY` — preferred for real use, since a multi-line key is awkward as one env var value. Takes precedence over `GITHUB_APP_PRIVATE_KEY` when set. See `secrets/README.md`. |
 | `GITHUB_WEBHOOK_SECRET` | a committed development value | Used to verify the `X-Hub-Signature-256` header on inbound webhooks. |

@@ -1,5 +1,6 @@
 package com.gatekeeper.github;
 
+import com.gatekeeper.config.SecretSanitizer;
 import com.gatekeeper.github.exception.InvalidWebhookSignatureException;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
@@ -23,7 +24,11 @@ public class WebhookSignatureVerifier {
 
     public WebhookSignatureVerifier(
             @Value("${gatekeeper.github.webhook.secret}") String webhookSecret, MeterRegistry meterRegistry) {
-        this.webhookSecret = webhookSecret;
+        // Sanitized here, not just at startup-diagnostic time - this is the value
+        // actually used to compute every signature, and must match GitHub's
+        // configured secret byte-for-byte (see SecretSanitizer's Javadoc for why
+        // a naive @Value binding alone isn't safe against a polluted value).
+        this.webhookSecret = SecretSanitizer.sanitize(webhookSecret);
         this.meterRegistry = meterRegistry;
     }
 

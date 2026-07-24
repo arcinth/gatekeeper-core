@@ -42,6 +42,7 @@ services:
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       GITHUB_APP_ID: ${GITHUB_APP_ID:-0}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-local-development-webhook-secret-change-me-in-production-please}
       # ./secrets is mounted read-only below at /secrets, so this must be a
       # container-side path, not the host-side one used by ./mvnw spring-boot:run.

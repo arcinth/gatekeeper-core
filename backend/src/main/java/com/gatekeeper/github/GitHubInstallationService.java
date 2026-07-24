@@ -50,6 +50,8 @@ public class GitHubInstallationService {
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    private final GitHubAppAuthService gitHubAppAuthService;
+    private final GitHubApiClient gitHubApiClient;
 
     @Transactional
     public void handleInstallationEvent(InstallationWebhookPayload payload, String deliveryId) {
@@ -109,7 +111,62 @@ public class GitHubInstallationService {
     }
 
     private void upsert(InstallationWebhookPayload payload, String deliveryId) {
-        InstallationWebhookPayload.InstallationData data = payload.installation();
+        GitHubInstallation installation = upsertFromData(payload.installation());
+        log.info("Installation {} upserted for account '{}' (delivery {}, action '{}').",
+                installation.getInstallationId(), installation.getGithubAccountLogin(), deliveryId, payload.action());
+
+        eventPublisher.publishEvent(new InstallationRepositorySyncRequestedEvent(installation.getInstallationId()));
+    }
+
+    /**
+     * Fetches an installation directly from GitHub's API (GET /app/installations/{id},
+     * App-JWT authenticated) and upserts it - the synchronous counterpart to the
+     * webhook-driven upsert() above, for the moment GitHub redirects back to the
+     * install callback with the installation id already in the URL. A real
+     * deployment's public webhook endpoint makes this redundant in principle,
+     * but local development has no way to receive that webhook at all (GitHub
+     * cannot reach localhost) - here, this is what actually creates the
+     * installation row, not just an optimization.
+     * <p>
+     * Also sweeps every other active installation row this GateKeeper instance
+     * already has on file: any GitHub no longer recognizes (a 404 on the same
+     * lookup) is exactly the outcome a "deleted" webhook this instance never
+     * received would have produced, so it is marked DISCONNECTED here instead
+     * of surviving as a stale "Manage" link pointing at an installation that no
+     * longer exists.
+     */
+    @Transactional
+    public GitHubInstallation reconcileInstallation(long installationId) {
+        String appJwt = gitHubAppAuthService.mintAppJwt();
+        InstallationWebhookPayload.InstallationData data = gitHubApiClient.getInstallation(installationId, appJwt)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "GitHub no longer recognizes installation " + installationId + "."));
+
+        GitHubInstallation installation = upsertFromData(data);
+        log.info("Installation {} reconciled directly from GitHub for account '{}'.",
+                installation.getInstallationId(), installation.getGithubAccountLogin());
+
+        pruneInstallationsGitHubNoLongerRecognizes(installationId, appJwt);
+
+        return installation;
+    }
+
+    private void pruneInstallationsGitHubNoLongerRecognizes(long justReconciledInstallationId, String appJwt) {
+        gitHubInstallationRepository.findAll().stream()
+                .filter(GitHubInstallation::isActive)
+                .filter(existing -> !existing.getInstallationId().equals(justReconciledInstallationId))
+                .forEach(existing -> {
+                    if (gitHubApiClient.getInstallation(existing.getInstallationId(), appJwt).isEmpty()) {
+                        existing.setActive(false);
+                        existing.setStatus(GitHubInstallationStatus.DISCONNECTED);
+                        gitHubInstallationRepository.save(existing);
+                        log.info("Installation {} no longer exists on GitHub; marked disconnected.",
+                                existing.getInstallationId());
+                    }
+                });
+    }
+
+    private GitHubInstallation upsertFromData(InstallationWebhookPayload.InstallationData data) {
         InstallationWebhookPayload.AccountData account = data.account();
 
         GitHubInstallation installation = gitHubInstallationRepository.findByInstallationId(data.id()).orElse(null);
@@ -128,18 +185,15 @@ public class GitHubInstallationService {
         installation.setPermissions(writePermissionsAsJson(data.permissions()));
         installation.setActive(true);
         // A reinstall/unsuspend of a previously-disconnected installation starts the
-        // lifecycle over - it has no synchronized repositories yet until the sync this
-        // upsert triggers below completes. A row already mid-lifecycle (ACTIVE/SYNCING/
-        // ERROR) keeps its own status untouched here; only the sync itself moves it.
+        // lifecycle over - it has no synchronized repositories yet until the sync
+        // that follows this upsert completes. A row already mid-lifecycle (ACTIVE/
+        // SYNCING/ERROR) keeps its own status untouched here; only the sync itself
+        // moves it.
         if (isNew || installation.getStatus() == GitHubInstallationStatus.DISCONNECTED) {
             installation.setStatus(GitHubInstallationStatus.CONNECTING);
         }
 
-        gitHubInstallationRepository.save(installation);
-        log.info("Installation {} upserted for account '{}' (delivery {}, action '{}').",
-                installation.getInstallationId(), account.login(), deliveryId, payload.action());
-
-        eventPublisher.publishEvent(new InstallationRepositorySyncRequestedEvent(installation.getInstallationId()));
+        return gitHubInstallationRepository.save(installation);
     }
 
     private void deactivate(Long installationId, String deliveryId) {

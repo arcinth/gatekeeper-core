@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -62,6 +63,25 @@ public class GitHubInstallationController {
         boolean configured = appId != 0 && appSlug != null && !appSlug.isBlank();
         String url = configured ? "https://github.com/apps/" + appSlug + "/installations/new" : null;
         return ApiResponse.ok(new InstallUrlResponse(url, configured));
+    }
+
+    /**
+     * The synchronous counterpart to the "installation" webhook (Milestone 8's
+     * onboarding callback page calls this immediately after GitHub redirects
+     * back with ?installation_id=... in the URL) - fetches that installation
+     * directly from GitHub and upserts it, and marks any other installation
+     * GitHub no longer recognizes as disconnected. See
+     * GitHubInstallationService.reconcileInstallation for why this exists at
+     * all: local development has no publicly reachable webhook endpoint, so
+     * this is what actually creates/repairs the stored installation, not just
+     * a faster path than waiting for one.
+     */
+    @PostMapping("/installations/reconcile")
+    @PreAuthorize("hasAuthority('REPOSITORY_MANAGE')")
+    public ApiResponse<GitHubInstallationResponse> reconcile(
+            @RequestParam long installationId, @AuthenticationPrincipal SecurityUser principal) {
+        rateLimitService.checkRepositorySync(principal.getId());
+        return ApiResponse.ok(toResponse(gitHubInstallationService.reconcileInstallation(installationId)));
     }
 
     @GetMapping("/installations")

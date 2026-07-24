@@ -39,6 +39,7 @@ jobs:
         with:
           name: surefire-reports
           path: backend/target/surefire-reports/
+          if-no-files-found: warn
 
       # Milestone 10: Security Hardening. A separate step (not bound into the
       # `mvn clean package` lifecycle in pom.xml) so a normal local build never pays
@@ -50,12 +51,19 @@ jobs:
         working-directory: backend
         run: ./mvnw org.owasp:dependency-check-maven:check
 
+      # if-no-files-found: warn, explicit rather than relying on the action's
+      # own default - always() means this step also runs when an earlier step
+      # in the job failed, including "Build and test" itself, in which case
+      # Dependency-Check never ran and never produced a report at all. That's
+      # an expected, non-broken outcome (there is nothing to upload yet, not
+      # a mistake), not something that should itself show as a failed step.
       - name: Upload Dependency-Check report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
           path: backend/target/dependency-check-report.*
+          if-no-files-found: warn
 
       # CycloneDX SBOM (Milestone 10: Security Hardening) - a machine-readable bill of
       # materials for every dependency in this build, published as a build artifact.
@@ -68,3 +76,4 @@ jobs:
         with:
           name: sbom
           path: backend/target/bom.json
+          if-no-files-found: warn

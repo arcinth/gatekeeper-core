@@ -5,6 +5,7 @@ import com.gatekeeper.github.dto.CreateCheckRunRequest;
 import com.gatekeeper.github.dto.GitHubFileChange;
 import com.gatekeeper.github.dto.InstallationAccessTokenResponse;
 import com.gatekeeper.github.dto.InstallationRepositoriesResponse;
+import com.gatekeeper.github.dto.InstallationWebhookPayload;
 import com.gatekeeper.github.dto.UpdateCheckRunRequest;
 import com.gatekeeper.github.exception.GitHubApiException;
 import com.gatekeeper.github.exception.GitHubTransientApiException;
@@ -12,6 +13,7 @@ import com.gatekeeper.observability.ObservedOperation;
 import com.gatekeeper.observability.OperationCategory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -224,6 +226,53 @@ public class GitHubApiClient {
             throw new GitHubApiException(
                     "Failed to reach GitHub while updating check run " + checkRunId
                             + " for " + repositoryFullName + ".", ex);
+        }
+    }
+
+    /**
+     * Fetches one installation's current state directly, authenticated with the
+     * App-level JWT (not an installation token - GitHub scopes this endpoint to
+     * the App itself). Used by GitHubInstallationService.reconcileInstallation:
+     * the synchronous counterpart to the "installation" webhook, for the moment
+     * GitHub redirects back to the install callback with the installation id
+     * in the URL, and for checking whether an installation GateKeeper already
+     * has on file still exists.
+     * <p>
+     * Returns empty rather than throwing on 404 - "GitHub doesn't recognize
+     * this installation anymore" is an expected, meaningful outcome here, not
+     * a failure.
+     */
+    @Retryable(
+            retryFor = GitHubTransientApiException.class,
+            maxAttemptsExpression = "${gatekeeper.github.api.retry.max-attempts:3}",
+            backoff = @Backoff(
+                    delayExpression = "${gatekeeper.github.api.retry.initial-backoff-ms:500}",
+                    multiplierExpression = "${gatekeeper.github.api.retry.backoff-multiplier:2}"))
+    @ObservedOperation(value = "github.getInstallation", category = OperationCategory.GITHUB_API)
+    public Optional<InstallationWebhookPayload.InstallationData> getInstallation(
+            long installationId, String appJwt) {
+        try {
+            InstallationWebhookPayload.InstallationData installation = restClient.get()
+                    .uri("/app/installations/{installationId}", installationId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + appJwt)
+                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .retrieve()
+                    .body(InstallationWebhookPayload.InstallationData.class);
+            return Optional.ofNullable(installation);
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                return Optional.empty();
+            }
+            String message = "GitHub returned an error fetching installation " + installationId
+                    + " (HTTP " + ex.getStatusCode().value() + ").";
+            if (isTransient(ex.getStatusCode())) {
+                throw new GitHubTransientApiException(message, ex);
+            }
+            throw new GitHubApiException(message, ex);
+        } catch (RestClientException ex) {
+            throw new GitHubTransientApiException(
+                    "Failed to reach GitHub while fetching installation " + installationId + ".", ex);
         }
     }
 

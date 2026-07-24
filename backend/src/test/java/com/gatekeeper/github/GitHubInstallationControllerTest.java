@@ -131,6 +131,32 @@ class GitHubInstallationControllerTest {
         verify(gitHubRepositorySyncService).synchronize(147259549L);
     }
 
+    @Test
+    void reconcile_returns403ForADeveloper() throws Exception {
+        authenticateAs("developer@example.com", "DEVELOPER");
+
+        mockMvc.perform(post("/api/v1/github/installations/reconcile?installationId=147338541")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void reconcile_fetchesFromGitHubAndReturnsTheUpsertedInstallationForAPlatformEngineer() throws Exception {
+        authenticateAs("platform@example.com", "PLATFORM_ENGINEER");
+        GitHubInstallation installation = GitHubInstallation.builder()
+                .installationId(147338541L).githubAccountLogin("arcinth").status(GitHubInstallationStatus.CONNECTING).build();
+        ReflectionTestUtils.setField(installation, "id", 9L);
+        when(gitHubInstallationService.reconcileInstallation(147338541L)).thenReturn(installation);
+        when(repositoryRepository.countByGithubInstallationId(9L)).thenReturn(0L);
+
+        mockMvc.perform(post("/api/v1/github/installations/reconcile?installationId=147338541")
+                        .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.githubAccountLogin").value("arcinth"));
+
+        verify(gitHubInstallationService).reconcileInstallation(147338541L);
+    }
+
     private void authenticateAs(String email, String roleName) {
         Claims claims = mock(Claims.class);
         when(claims.get(JwtService.CLAIM_TYPE, String.class)).thenReturn(JwtService.TOKEN_TYPE_ACCESS);

@@ -44,6 +44,13 @@ public class GitHubApiClient {
             RestClient.Builder restClientBuilder,
             @Value("${gatekeeper.github.api.base-url}") String baseUrl,
             @Value("${gatekeeper.analysis.max-changed-files-per-pull-request}") int maxChangedFilesPerPullRequest) {
+        // The request factory itself is set globally, on the auto-configured
+        // builder, via GitHubApiClientConfig's RestClientCustomizer - not here.
+        // Setting it here would work for production but unconditionally
+        // overwrite whatever GitHubApiClientTest/GitHubApiClientRetryTest's
+        // MockRestServiceServer.bindTo(builder) had already configured on
+        // this exact builder instance, silently breaking every test that
+        // mocks this client.
         this.restClient = restClientBuilder.baseUrl(baseUrl).build();
         this.maxChangedFilesPerPullRequest = maxChangedFilesPerPullRequest;
     }

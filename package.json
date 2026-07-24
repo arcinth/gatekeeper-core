@@ -1,0 +1,10 @@
+{
+  "name": "gatekeeper-core",
+  "private": true,
+  "description": "Root convenience scripts for local development. See docs/Development.md.",
+  "scripts": {
+    "dev:all": "node scripts/dev-all.mjs",
+    "dev:all:demo": "node scripts/dev-all.mjs --demo",
+    "dev:stop": "node scripts/dev-all.mjs --stop"
+  }
+}

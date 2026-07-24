@@ -121,6 +121,12 @@ class SecurityFindingQueryIntegrationTest {
         registry.add("gatekeeper.github.api.base-url", () -> wireMockServer.baseUrl());
         registry.add("gatekeeper.github.app.id", () -> "12345");
         registry.add("gatekeeper.github.app.private-key", () -> testAppPrivateKeyPem);
+        // Must not be left at the committed placeholder default alongside a
+        // real (non-zero) app.id above - GitHubAppConfigurationDiagnostics
+        // refuses to start the context otherwise (Milestone 10 follow-up:
+        // this exact combination is what a genuinely misconfigured deployment
+        // looks like, so the check does not carve out an exception for tests).
+        registry.add("gatekeeper.github.webhook.secret", () -> "test-webhook-secret-for-integration-tests");
     }
 
     @Autowired

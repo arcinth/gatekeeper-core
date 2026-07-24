@@ -26,5 +26,10 @@ jobs:
       # organization use, which this avoids entirely.
       - name: Gitleaks scan
         run: |
+          # --gitleaks-ignore-path is explicit rather than left at its "."
+          # default: the gitleaks image's own WORKDIR is /, not /repo, so the
+          # default would silently never find .gitleaksignore at the repo
+          # root - the scan would still pass locally (interactive shells
+          # often cd first) but the ignore file would be dead weight in CI.
           docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
-            detect --source=/repo --redact -v
+            detect --source=/repo --gitleaks-ignore-path=/repo --redact -v

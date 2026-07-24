@@ -1,0 +1,45 @@
+# Gitleaks allowlist - each entry below is a verified false positive or an
+# intentional test fixture that must resemble a real credential's shape to
+# exercise GateKeeper's own secret-detection rules (AWS_ACCESS_KEY,
+# GITHUB_PAT, HARDCODED_SECRET) or PEM-parsing error paths. None of these are
+# real, currently-valid credentials. Reviewed 2026-07-24 during the v1.0.0
+# release stabilization pass.
+#
+# Fingerprint format: <commit>:<file>:<rule-id>:<start-line>, exactly as
+# `gitleaks detect -v` reports it - regenerate by re-running that command if
+# a finding's line number ever shifts.
+
+# JWT/secret-strength unit test fixtures - long placeholder strings used only
+# to satisfy "not the committed default" / "not blocklisted" / "sufficiently
+# long" checks. Not real secrets, not modeled on any real credential format.
+4c67f99e64d2b6e05ccc368be762344775faa68d:backend/src/test/java/com/gatekeeper/config/JwtSecretStartupValidatorTest.java:generic-api-key:10
+4c67f99e64d2b6e05ccc368be762344775faa68d:backend/src/test/java/com/gatekeeper/config/SecretStrengthValidatorTest.java:generic-api-key:25
+4c67f99e64d2b6e05ccc368be762344775faa68d:backend/src/test/java/com/gatekeeper/security/JwtServiceTest.java:generic-api-key:18
+
+# E2E-TESTING.md walkthrough content: a deliberately-planted example secret
+# demonstrating the Security Engine's HARDCODED_SECRET rule to a manual
+# tester, and a mention of the literal PEM header text
+# ("-----BEGIN PRIVATE KEY-----") in troubleshooting prose - not a key.
+baa707eb9a04f9db5176763a032934387c594772:E2E-TESTING.md:generic-api-key:200
+baa707eb9a04f9db5176763a032934387c594772:E2E-TESTING.md:private-key:339
+
+# SecurityEngine rule test fixtures: these must match the exact shape
+# GitHub PATs / AWS access keys use, or the test would no longer verify the
+# app's own detection regex. AWS's ASIA-prefixed temporary-credential shape
+# has no AWS-published safe example (unlike the AKIA one already used
+# elsewhere in this same file); GitHub has none published at all.
+89ac7717158c8baa29720ce6b8a20fdbcd6275cf:backend/src/test/java/com/gatekeeper/securityengine/SecurityEngineIntegrationTest.java:github-pat:59
+89ac7717158c8baa29720ce6b8a20fdbcd6275cf:backend/src/test/java/com/gatekeeper/securityengine/rule/AwsAccessKeyRuleTest.java:aws-access-token:38
+89ac7717158c8baa29720ce6b8a20fdbcd6275cf:backend/src/test/java/com/gatekeeper/securityengine/rule/AwsAccessKeyRuleTest.java:aws-access-token:76
+
+# PemPrivateKeyReader's own header/footer marker constants - fixed PEM
+# boilerplate text identical across every PKCS#8/PKCS#1 key ever generated,
+# not key material. Structurally cannot be a real secret.
+34be973896efa7a85bc87bb2d50f5fb76f2ff621:backend/src/main/java/com/gatekeeper/github/PemPrivateKeyReader.java:private-key:18
+34be973896efa7a85bc87bb2d50f5fb76f2ff621:backend/src/main/java/com/gatekeeper/github/PemPrivateKeyReader.java:private-key:20
+
+# PEM-parsing test fixtures: PKCS#1-format placeholders with a truncated,
+# non-functional base64 body ("MIIBOgIBAAJBAK...") used only to verify the
+# PKCS#1-vs-PKCS#8 error path - the header shape is the point of the test.
+34be973896efa7a85bc87bb2d50f5fb76f2ff621:backend/src/test/java/com/gatekeeper/github/GitHubAppAuthServiceTest.java:private-key:78
+34be973896efa7a85bc87bb2d50f5fb76f2ff621:backend/src/test/java/com/gatekeeper/github/PemPrivateKeyReaderTest.java:private-key:35

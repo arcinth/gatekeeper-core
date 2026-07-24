@@ -1,5 +1,6 @@
 package com.gatekeeper.securityfinding.dto;
 
+import com.gatekeeper.pullrequest.PullRequestStatus;
 import com.gatekeeper.securityengine.SecurityCategory;
 import com.gatekeeper.securityengine.SecuritySeverity;
 import com.gatekeeper.securityfinding.SecurityFindingEntity;
@@ -18,6 +19,7 @@ public record SecurityFindingResponse(
         Long analysisRunId,
         String repositoryFullName,
         Integer pullRequestNumber,
+        PullRequestStatus pullRequestStatus,
         String commitSha,
         String ruleId,
         SecurityCategory category,
@@ -34,6 +36,7 @@ public record SecurityFindingResponse(
                 entity.getAnalysisRun().getId(),
                 entity.getAnalysisRun().getPullRequest().getRepository().getFullName(),
                 entity.getAnalysisRun().getPullRequest().getNumber(),
+                entity.getAnalysisRun().getPullRequest().getStatus(),
                 entity.getAnalysisRun().getCommitSha(),
                 entity.getRuleId(),
                 entity.getCategory(),

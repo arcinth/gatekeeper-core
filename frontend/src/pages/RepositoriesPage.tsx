@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
+import { Cable, ExternalLink, FolderGit2, RefreshCw } from 'lucide-react'
 import { AppLayout } from '../layouts/AppLayout'
-import { LoadingSpinner } from '../components/LoadingSpinner'
-import { Badge } from '../components/ui/Badge'
-import { Button } from '../components/ui/Button'
-import { Card } from '../components/ui/Card'
-import { EmptyState } from '../components/ui/EmptyState'
-import { ErrorState } from '../components/ui/ErrorState'
-import { EmptyTableRow, Table, TableBody, TableHead } from '../components/ui/Table'
-import { ACTIVE_STATE_TONES, GITHUB_INSTALLATION_STATUS_TONES } from '../components/ui/badgeTones'
+import { Surface, SectionHeading } from '../components/ui/Surface'
+import { Chip } from '../components/ui/Chip'
+import { EmptyState, ErrorState } from '../components/ui/states'
+import { SkeletonRows, SkeletonTiles } from '../components/ui/Skeleton'
+import { buttonClasses } from '../components/ui/buttonClasses'
+import { installationStatusTone } from '../components/ui/tones'
+import { formatRelativeTime } from '../lib/format'
 import { githubInstallationService } from '../services/githubInstallationService'
 import { repositoryService } from '../services/repositoryService'
 import type { ApiErrorResponse } from '../types/api'
@@ -24,6 +24,12 @@ const STATUS_LABELS: Record<GitHubInstallation['status'], string> = {
   DISCONNECTED: 'Disconnected',
 }
 
+/**
+ * The operator home (Product Experience spec, §07). Connection health leads,
+ * because a broken installation silently starves every downstream screen -
+ * then the repositories themselves, each one a link into its own governance
+ * detail rather than a separate top-level "Governance" destination.
+ */
 export function RepositoriesPage() {
   const [repositories, setRepositories] = useState<Repository[]>([])
   const [installations, setInstallations] = useState<GitHubInstallation[]>([])
@@ -33,21 +39,26 @@ export function RepositoriesPage() {
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
 
-  useEffect(() => {
-    loadAll()
-  }, [])
-
-  function loadAll() {
+  const loadAll = useCallback(async () => {
     setIsLoading(true)
     setError(null)
-    Promise.all([repositoryService.list(), githubInstallationService.list()])
-      .then(([repositoriesResult, installationsResult]) => {
-        setRepositories(repositoriesResult)
-        setInstallations(installationsResult)
-      })
-      .catch(() => setError('Failed to load repositories.'))
-      .finally(() => setIsLoading(false))
-  }
+    try {
+      const [repositoriesResult, installationsResult] = await Promise.all([
+        repositoryService.list(),
+        githubInstallationService.list(),
+      ])
+      setRepositories(repositoriesResult)
+      setInstallations(installationsResult)
+    } catch {
+      setError('Failed to load repositories.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadAll()
+  }, [loadAll])
 
   async function handleConnectGitHub() {
     setError(null)
@@ -72,7 +83,10 @@ export function RepositoriesPage() {
     try {
       const updated = await githubInstallationService.sync(installation.id)
       setInstallations((current) => current.map((existing) => (existing.id === updated.id ? updated : existing)))
-      repositoryService.list().then(setRepositories).catch(() => undefined)
+      repositoryService
+        .list()
+        .then(setRepositories)
+        .catch(() => undefined)
     } catch (err) {
       setError(describeError(err, 'resynchronize this installation'))
     } finally {
@@ -81,7 +95,7 @@ export function RepositoriesPage() {
   }
 
   async function handleRemove(repository: Repository) {
-    if (!window.confirm(`Disconnect ${repository.fullName}? GateKeeper will no longer analyze its Pull Requests.`)) {
+    if (!window.confirm(`Disconnect ${repository.fullName}? GateKeeper will no longer analyze its pull requests.`)) {
       return
     }
     setError(null)
@@ -90,9 +104,8 @@ export function RepositoriesPage() {
       await repositoryService.remove(repository.id)
       setRepositories((current) => current.filter((existing) => existing.id !== repository.id))
     } catch {
-      // No frontend role-gating exists anywhere else in this app either - the
-      // backend's own @PreAuthorize (ADMINISTRATOR/PLATFORM_ENGINEER) is the
-      // real guard; a 403 here is reported, not silently swallowed.
+      // The backend's own @PreAuthorize is the real guard - a 403 here is
+      // reported rather than silently swallowed.
       setError(`Failed to disconnect ${repository.fullName}. You may not have permission to do this.`)
     } finally {
       setRemovingId(null)
@@ -101,96 +114,109 @@ export function RepositoriesPage() {
 
   return (
     <AppLayout
+      eyebrow="Operations"
       title="Repositories"
-      description="Connect GitHub repositories for GateKeeper to govern, and manage the ones already connected."
+      description="Connection health and the repositories GateKeeper governs."
       actions={
-        <Button variant="primary" onClick={() => void handleConnectGitHub()} disabled={isConnecting}>
-          {isConnecting ? 'Opening GitHub...' : 'Connect GitHub'}
-        </Button>
+        <button
+          type="button"
+          className={buttonClasses('primary', 'md')}
+          onClick={() => void handleConnectGitHub()}
+          disabled={isConnecting}
+        >
+          <Cable className="h-4 w-4" aria-hidden="true" />
+          {isConnecting ? 'Opening GitHub…' : 'Connect GitHub'}
+        </button>
       }
     >
-      {error && <ErrorState message={error} />}
+      {error && <ErrorState message={error} onRetry={() => void loadAll()} className="mb-5" />}
 
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : (
-        <>
-          <section className="mb-8">
-            <h2 className="mb-3 text-sm font-semibold text-slate-700">GitHub Connections</h2>
-            {installations.length ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {installations.map((installation) => (
-                  <InstallationCard
-                    key={installation.id}
-                    installation={installation}
-                    isSyncing={syncingId === installation.id}
-                    onResync={() => void handleResync(installation)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="No GitHub connections yet"
-                description="Connect a GitHub organization or account so GateKeeper can discover and analyze its repositories."
-              />
-            )}
-          </section>
+      <div className="flex flex-col gap-7">
+        <section>
+          <SectionHeading eyebrow="Connections" title="GitHub" />
+          {isLoading ? (
+            <SkeletonTiles count={3} />
+          ) : installations.length === 0 ? (
+            <EmptyState
+              icon={Cable}
+              title="No GitHub connections yet"
+              description="Connect a GitHub organization or account so GateKeeper can discover and analyze its repositories."
+              action={
+                <button
+                  type="button"
+                  className={buttonClasses('primary', 'md')}
+                  onClick={() => void handleConnectGitHub()}
+                  disabled={isConnecting}
+                >
+                  Connect GitHub
+                </button>
+              }
+            />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {installations.map((installation) => (
+                <InstallationCard
+                  key={installation.id}
+                  installation={installation}
+                  isSyncing={syncingId === installation.id}
+                  onResync={() => void handleResync(installation)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
 
-          <section>
-            <h2 className="mb-3 text-sm font-semibold text-slate-700">Repositories</h2>
-            <Table>
-              <TableHead>
-                <tr>
-                  <th className="px-4 py-2">Repository</th>
-                  <th className="px-4 py-2">Description</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Connected</th>
-                  <th className="px-4 py-2">Governance</th>
-                  <th className="px-4 py-2"></th>
-                </tr>
-              </TableHead>
-              <TableBody>
-                {repositories.length ? (
-                  repositories.map((repository) => (
-                    <tr key={repository.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2 font-medium text-slate-900">{repository.fullName}</td>
-                      <td className="px-4 py-2 text-slate-500">{repository.description ?? '—'}</td>
-                      <td className="px-4 py-2">
-                        <Badge tone={repository.active ? ACTIVE_STATE_TONES.active : ACTIVE_STATE_TONES.inactive}>
-                          {repository.active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2 text-slate-500">{new Date(repository.createdAt).toLocaleString()}</td>
-                      <td className="px-4 py-2">
-                        <Link
-                          to={`/repositories/${repository.id}/governance`}
-                          className="text-xs font-medium text-slate-700 hover:underline"
-                        >
-                          View Governance &rarr;
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => void handleRemove(repository)}
-                          disabled={removingId === repository.id}
-                        >
-                          {removingId === repository.id ? 'Removing...' : 'Remove'}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <EmptyTableRow colSpan={6}>
-                    No repositories connected yet - connect a GitHub account above to get started.
-                  </EmptyTableRow>
-                )}
-              </TableBody>
-            </Table>
-          </section>
-        </>
-      )}
+        <section>
+          <SectionHeading
+            eyebrow="Governed"
+            title="Repositories"
+            actions={
+              <span className="tabular font-mono text-[11px] text-faint">
+                {repositories.length} connected
+              </span>
+            }
+          />
+          {isLoading ? (
+            <SkeletonRows rows={4} />
+          ) : repositories.length === 0 ? (
+            <EmptyState
+              icon={FolderGit2}
+              title="No repositories connected yet"
+              description="Once a GitHub connection finishes syncing, its repositories appear here automatically."
+            />
+          ) : (
+            <div className="divide-y divide-line-soft overflow-hidden rounded-lg border border-line bg-surface">
+              {repositories.map((repository) => (
+                <div key={repository.id} className="flex items-center gap-4 px-4 py-3.5">
+                  <Link to={`/repositories/${repository.id}`} className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-content">{repository.fullName}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted">
+                      {repository.description ?? 'No description'}
+                    </p>
+                  </Link>
+
+                  <Chip tone={repository.active ? 'pass' : 'neutral'}>
+                    {repository.active ? 'Active' : 'Inactive'}
+                  </Chip>
+
+                  <span className="hidden shrink-0 font-mono text-[11px] text-faint md:block">
+                    {formatRelativeTime(repository.createdAt)}
+                  </span>
+
+                  <button
+                    type="button"
+                    className={buttonClasses('danger', 'sm')}
+                    onClick={() => void handleRemove(repository)}
+                    disabled={removingId === repository.id}
+                  >
+                    {removingId === repository.id ? 'Removing…' : 'Disconnect'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </AppLayout>
   )
 }
@@ -205,62 +231,53 @@ function InstallationCard({
   onResync: () => void
 }) {
   return (
-    <Card padding="p-4">
+    <Surface padding="p-4">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-slate-900">{installation.githubAccountLogin}</p>
-          <p className="text-xs text-slate-500">
-            {installation.githubAccountType ?? 'Account'} &middot; {installation.repositorySelection ?? 'unknown'} repositories
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-content">{installation.githubAccountLogin}</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-faint">
+            {installation.githubAccountType ?? 'Account'} · {installation.repositorySelection ?? 'unknown'} repos
           </p>
         </div>
-        <Badge tone={GITHUB_INSTALLATION_STATUS_TONES[installation.status]}>{STATUS_LABELS[installation.status]}</Badge>
+        <Chip tone={installationStatusTone(installation.status)}>{STATUS_LABELS[installation.status]}</Chip>
       </div>
 
-      <div className="mt-3 text-xs text-slate-500">
-        <p>{installation.repositoryCount} repositor{installation.repositoryCount === 1 ? 'y' : 'ies'} connected</p>
-        <p>Last synchronized: {formatRelativeTime(installation.lastSuccessfulSyncAt)}</p>
-        {installation.status === 'ERROR' && installation.lastSyncError && (
-          <p className="mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-red-700">
-            {installation.lastSyncError}
-          </p>
-        )}
-      </div>
+      <dl className="mt-3.5 flex flex-col gap-1.5 text-xs">
+        <div className="flex justify-between gap-2">
+          <dt className="text-faint">Repositories</dt>
+          <dd className="tabular text-muted">{installation.repositoryCount}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-faint">Last sync</dt>
+          <dd className="text-muted">
+            {installation.lastSuccessfulSyncAt ? formatRelativeTime(installation.lastSuccessfulSyncAt) : 'Never'}
+          </dd>
+        </div>
+      </dl>
 
-      <div className="mt-3 flex items-center justify-between">
+      {installation.status === 'ERROR' && installation.lastSyncError && (
+        <p className="mt-3 rounded-md border border-block-line bg-block-bg px-2.5 py-2 text-xs text-muted">
+          {installation.lastSyncError}
+        </p>
+      )}
+
+      <div className="mt-4 flex items-center justify-between gap-2">
         <a
           href={`https://github.com/settings/installations/${installation.installationId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs font-medium text-slate-500 hover:underline"
+          className="flex items-center gap-1.5 font-mono text-[11px] text-faint transition-colors hover:text-content"
         >
-          Manage on GitHub &rarr;
+          Manage
+          <ExternalLink className="h-3 w-3" aria-hidden="true" />
         </a>
-        <Button variant="secondary" size="sm" onClick={onResync} disabled={isSyncing}>
-          {isSyncing ? 'Syncing...' : 'Resync now'}
-        </Button>
+        <button type="button" className={buttonClasses('secondary', 'sm')} onClick={onResync} disabled={isSyncing}>
+          <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} aria-hidden="true" />
+          {isSyncing ? 'Syncing…' : 'Resync'}
+        </button>
       </div>
-    </Card>
+    </Surface>
   )
-}
-
-function formatRelativeTime(isoTimestamp: string | null): string {
-  if (!isoTimestamp) {
-    return 'never'
-  }
-  const elapsedMs = Date.now() - new Date(isoTimestamp).getTime()
-  const elapsedMinutes = Math.round(elapsedMs / 60_000)
-  if (elapsedMinutes < 1) {
-    return 'just now'
-  }
-  if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} minute${elapsedMinutes === 1 ? '' : 's'} ago`
-  }
-  const elapsedHours = Math.round(elapsedMinutes / 60)
-  if (elapsedHours < 24) {
-    return `${elapsedHours} hour${elapsedHours === 1 ? '' : 's'} ago`
-  }
-  const elapsedDays = Math.round(elapsedHours / 24)
-  return `${elapsedDays} day${elapsedDays === 1 ? '' : 's'} ago`
 }
 
 function describeError(err: unknown, action: string): string {

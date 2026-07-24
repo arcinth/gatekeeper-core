@@ -1,15 +1,11 @@
 import {
-  Activity,
-  ClipboardList,
   FolderGit2,
-  Gavel,
   GitPullRequest,
-  History,
-  LayoutDashboard,
+  Inbox,
   ListChecks,
+  Settings,
   ShieldAlert,
-  Sparkles,
-  Users,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -17,46 +13,27 @@ export interface NavItem {
   label: string
   path: string
   icon: LucideIcon
-}
-
-export interface NavSection {
-  label: string
-  items: NavItem[]
+  /** Marks a section boundary above this item in the rail. */
+  startsGroup?: boolean
 }
 
 /**
- * Single source of truth for the sidebar. Grouped to match how the product
- * is actually used: the reviewer workspace first (Pull Requests, the primary
- * screen per Milestone 1), then the engines that feed it, then
- * administration. Repository Governance isn't listed here - it's a drill-down
- * reached from a specific Repository row, not a top-level destination.
+ * Six destinations, shaped by workflow rather than by schema (Product
+ * Experience spec, §05).
+ *
+ * The five entity pages that used to sit under an "Analysis" heading -
+ * Analysis Runs, Policy Findings, Security Findings, AI Review Runs and
+ * Verdicts - are gone as destinations. They were all facets of a single pull
+ * request, and they now live inside it. Security keeps a top-level home, but
+ * reframed: it is a triage queue of what still needs attention, not a flat
+ * dump of every finding ever produced.
  */
-export const NAV_SECTIONS: NavSection[] = [
-  {
-    label: 'Overview',
-    items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
-  },
-  {
-    label: 'Reviewer Workspace',
-    items: [{ label: 'Pull Requests', path: '/pull-requests', icon: GitPullRequest }],
-  },
-  {
-    label: 'Analysis',
-    items: [
-      { label: 'Analysis Runs', path: '/analysis-runs', icon: Activity },
-      { label: 'Policy Findings', path: '/policy-findings', icon: ClipboardList },
-      { label: 'Security Findings', path: '/security-findings', icon: ShieldAlert },
-      { label: 'AI Review Runs', path: '/ai-review-runs', icon: Sparkles },
-      { label: 'Verdicts', path: '/verdicts', icon: Gavel },
-    ],
-  },
-  {
-    label: 'Administration',
-    items: [
-      { label: 'Repositories', path: '/repositories', icon: FolderGit2 },
-      { label: 'Policies', path: '/policies', icon: ListChecks },
-      { label: 'Users', path: '/users', icon: Users },
-      { label: 'Audit Log', path: '/audit-log', icon: History },
-    ],
-  },
+export const NAV_ITEMS: NavItem[] = [
+  { label: 'Inbox', path: '/inbox', icon: Inbox },
+  { label: 'Pull Requests', path: '/pull-requests', icon: GitPullRequest },
+  { label: 'Security', path: '/security', icon: ShieldAlert },
+  { label: 'Repositories', path: '/repositories', icon: FolderGit2, startsGroup: true },
+  { label: 'Policies', path: '/policies', icon: ListChecks },
+  { label: 'Insights', path: '/insights', icon: TrendingUp },
+  { label: 'Settings', path: '/settings', icon: Settings, startsGroup: true },
 ]

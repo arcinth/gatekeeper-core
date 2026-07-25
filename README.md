@@ -109,11 +109,9 @@ Policy and Security findings are deterministic and feed the Verdict. AI Review f
 backend/                 Spring Boot API (Java 21)
 frontend/                React + TypeScript SPA
 docs/                    Product vision, architecture, domain model, API design, and dev workflow documents
-scripts/                 Cross-platform dispatcher behind `npm run dev:all` / `dev:stop`
+scripts/                 Local dev scripts - start-dev/stop-dev (.ps1/.sh/.bat) and the dev-all.mjs dispatcher behind `npm run dev:all` / `dev:stop`
 secrets/                 Local-only credential material (GitHub App private key) - gitignored
 docker-compose.yml       Postgres (and, optionally, a containerized backend) for local development
-start-dev.ps1/.sh/.bat   One-command local dev startup - see docs/Development.md
-stop-dev.ps1/.sh/.bat    Matching shutdown
 ```
 
 ## Getting started
@@ -123,13 +121,13 @@ Prerequisites: JDK 21, Node.js 20 or later, Docker.
 The fastest path — one command starts Postgres, the backend, and the frontend together, detecting and reusing anything already running:
 
 ```bash
-./start-dev.sh          # Linux/macOS
-.\start-dev.ps1         # Windows PowerShell
-start-dev.bat           # Windows, double-click or cmd
-npm run dev:all         # any platform, if you'd rather remember one npm script
+./scripts/start-dev.sh          # Linux/macOS
+.\scripts\start-dev.ps1         # Windows PowerShell
+scripts\start-dev.bat           # Windows, double-click or cmd
+npm run dev:all                 # any platform, if you'd rather remember one npm script
 ```
 
-Add `-Demo` / `--demo` / `npm run dev:all:demo` to also seed a curated demo dataset instead of starting against an empty database. Stop everything the same way, with `stop-dev.ps1`/`.sh`/`.bat` or `npm run dev:stop`. See [docs/Development.md](docs/Development.md) for what these scripts do, port-conflict handling, and troubleshooting.
+Add `-Demo` / `--demo` / `npm run dev:all:demo` to also seed a curated demo dataset instead of starting against an empty database. Stop everything the same way, with `scripts/stop-dev.ps1`/`.sh`/`.bat` or `npm run dev:stop`. See [docs/Development.md](docs/Development.md) for what these scripts do, port-conflict handling, and troubleshooting.
 
 Prefer to run each piece by hand instead:
 

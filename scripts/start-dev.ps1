@@ -14,7 +14,7 @@ param(
 # NativeCommandError under 'Stop' even when exit code is 0. Failures are
 # checked explicitly via $LASTEXITCODE / try-catch throughout instead.
 $ErrorActionPreference = 'Continue'
-$RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RepoRoot
 
 $BackendPort = 8080

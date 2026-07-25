@@ -9,9 +9,9 @@ No manual migration steps. Flyway migrations `V1` through `V16` are additive and
 If your local database has accumulated ad-hoc test data from earlier development (repositories/installations/analysis runs created by hand or by prior manual verification) that now collides with real usage — the specific, previously-encountered symptom is a security/verdict page that looks inconsistent with itself, or a GitHub "Manage" link pointing at an installation ID GitHub no longer recognizes. Both are data-hygiene issues, not schema issues:
 
 ```bash
-./stop-dev.sh                      # or stop-dev.ps1 / .bat
+./scripts/stop-dev.sh              # or scripts/stop-dev.ps1 / .bat
 docker compose down -v             # removes the named volume - deletes all data
-./start-dev.sh --demo              # recreates an empty database, seeds the curated demo dataset
+./scripts/start-dev.sh --demo      # recreates an empty database, seeds the curated demo dataset
 ```
 
 Or, to keep production/real data and only clear a specific stale record, use the application's own reconciliation path rather than editing the database directly — GitHub installation records self-heal via `POST /api/v1/github/installations/reconcile?installationId=...` (see `docs/Development.md` and `GitHubInstallationService.reconcileInstallation`).
@@ -28,7 +28,7 @@ Nothing else changed shape. Every other environment variable from earlier develo
 
 ## 3. `.env` now has a real effect on the native run path
 
-Previously, `.env` only fed `docker-compose.yml`'s own variable substitution — the backend run via `./mvnw spring-boot:run` never read it, so credentials had to be re-exported in every terminal session or set through an IDE run configuration. `start-dev.ps1`/`.sh` now load `.env` and export it into the backend process automatically.
+Previously, `.env` only fed `docker-compose.yml`'s own variable substitution — the backend run via `./mvnw spring-boot:run` never read it, so credentials had to be re-exported in every terminal session or set through an IDE run configuration. `scripts/start-dev.ps1`/`.sh` now load `.env` and export it into the backend process automatically.
 
 If you have credentials currently set only via shell exports or an IDE run configuration, no action is required — those still work, and take priority over `.env` (an already-set environment variable is never overridden). But going forward, `.env` is the more durable place to put them: copy `.env.example` to `.env` once, and stop re-exporting values per session.
 

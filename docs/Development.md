@@ -18,8 +18,8 @@ From the repository root:
 
 | Platform | Command |
 |---|---|
-| Windows (PowerShell or double-click) | `start-dev.bat` or `.\start-dev.ps1` |
-| Linux / macOS | `./start-dev.sh` |
+| Windows (PowerShell or double-click) | `scripts\start-dev.bat` or `.\scripts\start-dev.ps1` |
+| Linux / macOS | `./scripts/start-dev.sh` |
 | Any platform, via npm | `npm run dev:all` |
 
 Add `-Demo` (PowerShell) / `--demo` (bash) / `npm run dev:all:demo` to also seed the curated demo dataset (`SPRING_PROFILES_ACTIVE=local,demo` - see [Demo profile](#demo-profile) below).
@@ -68,8 +68,8 @@ Re-running the command is always safe: anything already up is detected and reuse
 
 | Platform | Command |
 |---|---|
-| Windows | `stop-dev.bat` or `.\stop-dev.ps1` |
-| Linux / macOS | `./stop-dev.sh` |
+| Windows | `scripts\stop-dev.bat` or `.\scripts\stop-dev.ps1` |
+| Linux / macOS | `./scripts/stop-dev.sh` |
 | Any platform, via npm | `npm run dev:stop` |
 
 This stops the frontend and backend (using the recorded PIDs when available, and killing whatever is listening on 8080/5173 as a fallback even if it wasn't started by `start-dev`), then runs `docker compose stop` to stop Postgres. The Postgres data volume is preserved - nothing is deleted. No process is left running afterward; run `start-dev` again for a clean slate.
@@ -111,9 +111,9 @@ There is no Spring Boot DevTools in this project, so devtools-triggered child-JV
 The Postgres data volume (`postgres-data` in `docker-compose.yml`) persists across `start-dev`/`stop-dev` cycles by design. To wipe it and start from an empty database:
 
 ```bash
-./stop-dev.sh          # or stop-dev.bat / stop-dev.ps1
-docker compose down -v # removes the named volume - this deletes all data
-./start-dev.sh          # recreates an empty database and re-runs migrations
+./scripts/stop-dev.sh          # or scripts/stop-dev.bat / scripts/stop-dev.ps1
+docker compose down -v         # removes the named volume - this deletes all data
+./scripts/start-dev.sh         # recreates an empty database and re-runs migrations
 ```
 
 ### Demo profile

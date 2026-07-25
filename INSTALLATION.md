@@ -2,7 +2,7 @@
 
 This document walks through setting up GateKeeper for local development: cloning the repository, starting PostgreSQL, running the backend and frontend, and the environment variables that control each part of the system.
 
-For a general overview of what GateKeeper does, see [README.md](README.md). For the system design behind these components, see the documents linked at the end of this guide. Once set up, day-to-day startup is faster with `start-dev.ps1`/`.sh`/`.bat` — one command for Postgres, backend, and frontend together — see [docs/Development.md](docs/Development.md); this guide covers the manual, piece-by-piece setup those scripts automate.
+For a general overview of what GateKeeper does, see [README.md](README.md). For the system design behind these components, see the documents linked at the end of this guide. Once set up, day-to-day startup is faster with `scripts/start-dev.ps1`/`.sh`/`.bat` — one command for Postgres, backend, and frontend together — see [docs/Development.md](docs/Development.md); this guide covers the manual, piece-by-piece setup those scripts automate.
 
 ## Prerequisites
 
@@ -93,7 +93,7 @@ The backend's configuration lives in `backend/src/main/resources/application.yml
 
 Every configurable value in `application.yml` is written as `${ENV_VAR:default}` — standard Spring property placeholder syntax. That means an actual environment variable always overrides the committed default, and nothing needs to change in the YAML itself to reconfigure a deployment.
 
-The backend itself does not read a `.env` file directly — Spring Boot only ever sees actual environment variables. `.env` (and `.env.example`) feed `docker-compose.yml`'s own variable substitution automatically. If you run `./mvnw spring-boot:run` or `java -jar` directly (outside `docker compose`), use [start-dev.ps1/.sh](docs/Development.md) — it loads `.env` from the repository root and exports it into the backend process's environment before launching, so the same `.env` file is the single source of truth either way. Running `./mvnw spring-boot:run` by hand, or via an IDE run configuration, still bypasses `.env`; set variables through your shell, `export`/`set`, or the IDE's own run configuration in that case.
+The backend itself does not read a `.env` file directly — Spring Boot only ever sees actual environment variables. `.env` (and `.env.example`) feed `docker-compose.yml`'s own variable substitution automatically. If you run `./mvnw spring-boot:run` or `java -jar` directly (outside `docker compose`), use [scripts/start-dev.ps1/.sh](docs/Development.md) — it loads `.env` from the repository root and exports it into the backend process's environment before launching, so the same `.env` file is the single source of truth either way. Running `./mvnw spring-boot:run` by hand, or via an IDE run configuration, still bypasses `.env`; set variables through your shell, `export`/`set`, or the IDE's own run configuration in that case.
 
 ## Frontend Setup
 

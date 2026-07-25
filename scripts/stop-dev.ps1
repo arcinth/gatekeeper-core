@@ -4,7 +4,7 @@
 # for good. See docs/Development.md.
 
 $ErrorActionPreference = 'Continue'
-$RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RepoRoot
 
 $LogDir = Join-Path $RepoRoot 'logs'

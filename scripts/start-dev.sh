@@ -7,7 +7,7 @@
 #   ./start-dev.sh --demo   also seed the curated demo dataset (local,demo profiles)
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 BACKEND_PORT=8080

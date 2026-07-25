@@ -13,9 +13,9 @@ Run these first — nothing below is worth doing by hand until these pass.
 
 ## 2. Environment sanity
 
-- [ ] `start-dev.ps1` / `.sh` reports `Database [OK]`, `Backend [OK]`, `Frontend [OK]`.
+- [ ] `scripts/start-dev.ps1` / `.sh` reports `Database [OK]`, `Backend [OK]`, `Frontend [OK]`.
 - [ ] Re-running `start-dev` immediately after prints "already running - reusing it" for both backend and frontend, rather than failing on a port conflict.
-- [ ] `stop-dev.ps1` / `.sh` leaves nothing listening on 8080 or 5173 afterward.
+- [ ] `scripts/stop-dev.ps1` / `.sh` leaves nothing listening on 8080 or 5173 afterward.
 - [ ] Backend startup log shows `✓ GitHub App configured` (or a specific, named `✗ ... missing: ...` if credentials aren't set — never a silent gap).
 
 ## 3. Authentication & access control

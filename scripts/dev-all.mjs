@@ -13,8 +13,8 @@ const demo = process.argv.includes('--demo')
 
 const isWindows = process.platform === 'win32'
 const script = isWindows
-  ? join(repoRoot, stop ? 'stop-dev.ps1' : 'start-dev.ps1')
-  : join(repoRoot, stop ? 'stop-dev.sh' : 'start-dev.sh')
+  ? join(__dirname, stop ? 'stop-dev.ps1' : 'start-dev.ps1')
+  : join(__dirname, stop ? 'stop-dev.sh' : 'start-dev.sh')
 
 const command = isWindows ? 'powershell' : 'bash'
 const args = isWindows

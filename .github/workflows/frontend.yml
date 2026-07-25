@@ -14,10 +14,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      # react-router 8 (see package.json) requires Node >=22.22.0; Node 20 is also
+      # past its own end-of-life (maintenance LTS ended April 2026).
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 

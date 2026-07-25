@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router'
 import { History, Users } from 'lucide-react'
 import { AppLayout } from './AppLayout'
 

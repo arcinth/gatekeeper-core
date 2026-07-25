@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import axios from 'axios'
 import { Cable, ExternalLink, FolderGit2, RefreshCw } from 'lucide-react'
 import { AppLayout } from '../layouts/AppLayout'

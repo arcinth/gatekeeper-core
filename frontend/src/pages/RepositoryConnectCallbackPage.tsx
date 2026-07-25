@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router'
 import { AppLayout } from '../layouts/AppLayout'
 import { ErrorState } from '../components/ui/states'
 import { Skeleton } from '../components/ui/Skeleton'

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router'
 import { ChevronRight, Menu } from 'lucide-react'
 import { Sidebar } from '../components/Sidebar'
 import { UserMenu } from '../components/UserMenu'

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { ExternalLink } from 'lucide-react'
 import { AppLayout } from '../layouts/AppLayout'
 import { Surface, SectionHeading } from '../components/ui/Surface'

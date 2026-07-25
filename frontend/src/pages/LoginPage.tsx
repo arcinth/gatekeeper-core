@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import axios from 'axios'
 import { ShieldCheck } from 'lucide-react'
 import { Input, Label } from '../components/ui/Field'

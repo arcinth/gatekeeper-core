@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { GitPullRequest } from 'lucide-react'
 import { Chip } from '../ui/Chip'
 import { analysisRunStatusTone, humanize, verdictOutcomeTone } from '../ui/tones'

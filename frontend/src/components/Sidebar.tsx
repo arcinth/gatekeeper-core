@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router'
 import { PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react'
 import { NAV_ITEMS } from '../config/navigation'
 

@@ -41,6 +41,22 @@ jobs:
           path: backend/target/surefire-reports/
           if-no-files-found: warn
 
+      # Without this, every run downloaded the entire NVD CVE database from scratch
+      # (nothing persisted `~/.dependency-check-data` between runs) - combined with
+      # NVD's public, no-API-key rate limit, that's what made this step take 5+ hours
+      # and eventually fail (see backend/pom.xml's dependency-check-maven
+      # <configuration> for the matching dataDirectory/nvdValidForHours settings).
+      # Keyed per-run (always unique, so every run saves a fresh cache reflecting
+      # whatever the NVD update step just did); restore-keys falls back via prefix
+      # match to the most recent prior run's cache.
+      - name: Cache OWASP Dependency-Check NVD database
+        uses: actions/cache@v4
+        with:
+          path: ~/.dependency-check-data
+          key: depcheck-nvd-${{ github.run_id }}
+          restore-keys: |
+            depcheck-nvd-
+
       # Milestone 10: Security Hardening. A separate step (not bound into the
       # `mvn clean package` lifecycle in pom.xml) so a normal local build never pays
       # the cost of a vulnerability-database refresh - only CI does. Fails the job on
@@ -49,6 +65,12 @@ jobs:
       # accepted-risk suppression.
       - name: OWASP Dependency-Check
         working-directory: backend
+        # NVD_API_KEY is optional (see pom.xml) - if a repository secret of that name
+        # is ever added, this passes it through and raises the NVD API rate limit;
+        # left unset it's an empty string and dependency-check runs unauthenticated
+        # exactly as before, just now against a cached database.
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: ./mvnw org.owasp:dependency-check-maven:check
 
       # if-no-files-found: warn, explicit rather than relying on the action's

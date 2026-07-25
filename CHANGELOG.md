@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- Upgraded Spring Boot 3.3.5 → 3.3.13 (latest patch on the existing 3.3.x line), plus compatible patch-level overrides for Tomcat (10.1.42 → 10.1.57), the PostgreSQL JDBC driver (42.7.4/42.7.7 → 42.7.12), Log4j API (2.23.1 → 2.25.4), and Commons Lang3 (3.14.0 → 3.18.0) — resolving every CVSS ≥ 7 finding OWASP Dependency-Check had a compatible patched version for.
+- Documented, CVE-scoped suppressions (`backend/dependency-check-suppression.xml`) for the remaining CVSS ≥ 7 findings on Spring Framework 6.1.21, Spring Security 6.3.10, Spring Boot 3.3.13, and Jackson-databind 2.17.3/2.18.4 — each confirmed to have no compatible patched version published yet (verified individually against Maven Central) short of a Spring Boot minor upgrade, which is out of scope for this stabilization pass.
+- OWASP Dependency-Check's NVD database is now cached across CI runs (`actions/cache`) and the plugin itself upgraded 10.0.4 → 12.1.3, fixing a regression where every CI run re-downloaded the entire NVD database from scratch and the job could take 5+ hours and fail outright. An optional `NVD_API_KEY` repository secret is wired through if one is ever added.
+- Disabled the OWASP Dependency-Check plugin's secondary Sonatype OSS Index analyzer, which shares a low-volume anonymous rate limit across the whole CI runner fleet and could hard-fail the build with an unrelated 401 rather than a real finding; the NVD-backed CVSS ≥ 7 policy (this project's actual security gate) is unaffected.
+
 ## [1.0.0] - 2026-07-24
 
 ### Added

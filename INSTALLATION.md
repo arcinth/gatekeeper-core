@@ -9,7 +9,7 @@ For a general overview of what GateKeeper does, see [README.md](README.md). For 
 | Software | Version | Why |
 |---|---|---|
 | Java (JDK) | 21 | `backend/pom.xml` targets `<java.version>21</java.version>`; the backend won't compile or run on an older JDK. |
-| Node.js | 20 or later | Required by the frontend's build tooling (Vite 8, React 19). |
+| Node.js | 22.22 or later | Required by `react-router` 8 and the frontend's build tooling (Vite 8, React 19). |
 | Docker | any recent version | Runs PostgreSQL via `docker-compose.yml`, and is required by the backend's Testcontainers-based integration tests. |
 | PostgreSQL | 16 | Provided by the `postgres:16-alpine` image in `docker-compose.yml`. A separately managed PostgreSQL 16 instance works too, as long as it's reachable. |
 
@@ -28,13 +28,14 @@ The repository is organized as two independent applications sharing one root:
 backend/                 Spring Boot API (Java 21, Maven)
 frontend/                React + TypeScript SPA (Vite)
 docs/                    Product vision, architecture, domain model, and API design documents
+scripts/                 Local dev scripts - start-dev/stop-dev (.ps1/.sh/.bat) and the dev-all.mjs dispatcher
+secrets/                 Local-only credential material (GitHub App private key) - gitignored
 docker-compose.yml       PostgreSQL, and an optional containerized backend
 .env.example             Template for docker-compose's environment variables
 infrastructure/          Reserved for infrastructure-as-code; currently empty
-scripts/                 Reserved for operational scripts; currently empty
 ```
 
-`infrastructure/` and `scripts/` exist in the repository but have no content yet — worth knowing so you don't go looking for deployment scripts that aren't there.
+`infrastructure/` exists in the repository but has no content yet — worth knowing so you don't go looking for deployment scripts that aren't there.
 
 The backend and frontend are set up separately; nothing in this guide requires them to be built together.
 
@@ -54,17 +55,25 @@ One thing to know about that named volume: PostgreSQL only applies `POSTGRES_USE
 
 ### Migrations
 
-Schema management is handled by Flyway (`spring.flyway.enabled: true` in `application.yml`), reading versioned SQL scripts from `backend/src/main/resources/db/migration`. There are eight migrations as of this release:
+Schema management is handled by Flyway (`spring.flyway.enabled: true` in `application.yml`), reading versioned SQL scripts from `backend/src/main/resources/db/migration`. There are sixteen migrations as of this release:
 
 ```
-V1__init_schema.sql                        organizations, roles, users, repositories
-V2__github_integration.sql                 GitHub App installations, pull requests
-V3__policy_findings.sql                    policy findings
-V4__analysis_run_and_finding_indexes.sql    indexes for the analysis run / findings queries
-V5__security_findings.sql                  security findings
-V6__ai_review.sql                          AI review runs and findings
-V7__verdicts.sql                           verdicts and verdict reasons
-V8__engineering_reports.sql                engineering reports and the audit log
+V1__init_schema.sql                            organizations, roles, users, repositories
+V2__github_integration.sql                     GitHub App installations, pull requests
+V3__policy_findings.sql                        policy findings
+V4__analysis_run_and_finding_indexes.sql       indexes for the analysis run / findings queries
+V5__security_findings.sql                      security findings
+V6__ai_review.sql                              AI review runs and findings
+V7__verdicts.sql                               verdicts and verdict reasons
+V8__engineering_reports.sql                    engineering reports and the audit log
+V9__github_installation_onboarding.sql         installation account, permissions, and active status
+V10__repository_installation_onboarding.sql    repository owner column
+V11__analysis_run_check_run.sql                automated verdict GitHub Check Run linkage
+V12__review_decisions.sql                      human reviewer decisions
+V13__analysis_run_review_check_run.sql         reviewer-decision GitHub Check Run linkage
+V14__policy_configurations.sql                 per-organization Policy Engine rule configuration
+V15__audit_log_structured_fields.sql           structured audit log fields
+V16__github_installation_lifecycle_status.sql  installation lifecycle status tracking
 ```
 
 These run automatically on backend startup — there is nothing to apply by hand. `baseline-on-migrate: true` is also set, which matters if you ever point the application at a database that already has other tables in it: without it, Flyway refuses to run against a non-empty schema it doesn't recognize.
@@ -296,6 +305,7 @@ There is no automated frontend test suite (no Jest, Vitest, or Playwright config
 | [docs/Observability.md](docs/Observability.md) | Health endpoints, metrics, structured logging, and the management port |
 | [docs/Security-Hardening.md](docs/Security-Hardening.md) | HTTP security headers, rate limiting, JWT hardening, secrets validation, dependency/secret scanning, Docker hardening |
 | [docs/Product-Backlog.md](docs/Product-Backlog.md) | Epics, features, and the sprint plan the MVP was built against |
+| [E2E-TESTING.md](E2E-TESTING.md) | Runbook for verifying the GitHub App integration against a real App and repository |
 
 ## Development Notes
 

@@ -38,6 +38,12 @@ Pull Request opened / updated
 
 Policy and Security findings are deterministic and feed the Verdict. AI Review findings are advisory and only ever reach the Engineering Report — the Verdict Engine has no code path that can read them.
 
+## Architecture
+
+The backend is a single Spring Boot application organized by feature (`analysisrun`, `policy`, `security`, `user`, and so on), each package owning its own entity, repository, service, and controller — there's no cross-cutting `controllers/`/`services/`/`repositories/` split. Cross-module coordination (fanning out a single Analysis Run to the Policy, Security, and AI Review engines) lives in a dedicated `orchestration` package rather than inside any one feature's service.
+
+The frontend is an independent React SPA that talks to the backend only through its REST API — the two applications share a repository but not a runtime. See [docs/Architecture.md](docs/Architecture.md) for module boundaries and the reasoning behind them, including why the Verdict Engine is structurally unable to read AI Review findings.
+
 ## Features
 
 **Authentication & Access Control**
@@ -99,7 +105,7 @@ Policy and Security findings are deterministic and feed the Verdict. AI Review f
 
 ## Tech stack
 
-**Backend:** Java 21, Spring Boot 3.3.5, Spring Security (JWT), Spring Data JPA, PostgreSQL 16, Flyway, Maven
+**Backend:** Java 21, Spring Boot 3.3.13, Spring Security (JWT), Spring Data JPA, PostgreSQL 16, Flyway, Maven
 
 **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, React Router, Axios
 
@@ -111,12 +117,13 @@ frontend/                React + TypeScript SPA
 docs/                    Product vision, architecture, domain model, API design, and dev workflow documents
 scripts/                 Local dev scripts - start-dev/stop-dev (.ps1/.sh/.bat) and the dev-all.mjs dispatcher behind `npm run dev:all` / `dev:stop`
 secrets/                 Local-only credential material (GitHub App private key) - gitignored
+infrastructure/          Reserved for infrastructure-as-code - currently empty
 docker-compose.yml       Postgres (and, optionally, a containerized backend) for local development
 ```
 
 ## Getting started
 
-Prerequisites: JDK 21, Node.js 20 or later, Docker.
+Prerequisites: JDK 21, Node.js 22 or later, Docker.
 
 The fastest path — one command starts Postgres, the backend, and the frontend together, detecting and reusing anything already running:
 
@@ -185,6 +192,7 @@ There is no automated frontend test suite yet; `npm run build` runs a TypeScript
 | [docs/Policy-Development.md](docs/Policy-Development.md) | How to add a new Policy or Security rule |
 | [docs/Development.md](docs/Development.md) | Day-to-day local dev: one-command start/stop, port conflicts, troubleshooting |
 | [docs/Testing-Checklist.md](docs/Testing-Checklist.md) | Release-validation checklist: automated gates and manual QA |
+| [E2E-TESTING.md](E2E-TESTING.md) | Runbook for verifying the GitHub App integration against a real App and repository |
 | [docs/Migration-Guide.md](docs/Migration-Guide.md) | What changed for existing checkouts, and how to cut the v1.0.0 release |
 | [docs/Decisions.md](docs/Decisions.md) | Architecture decision records |
 | [docs/Product-Backlog.md](docs/Product-Backlog.md) | Epics, features, and the sprint plan the MVP was built against |

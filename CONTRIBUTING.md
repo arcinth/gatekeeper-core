@@ -22,9 +22,9 @@ Follow [INSTALLATION.md](INSTALLATION.md) for setup — starting PostgreSQL, run
 backend/                 Spring Boot API (Java 21, Maven)
 frontend/                React + TypeScript SPA (Vite)
 docs/                    Product vision, architecture, domain model, and API design documents
+scripts/                 Local dev scripts - start-dev/stop-dev (.ps1/.sh/.bat) and the dev-all.mjs dispatcher
 docker-compose.yml       PostgreSQL, and an optional containerized backend
 infrastructure/          Reserved for infrastructure-as-code; currently empty
-scripts/                 Reserved for operational scripts; currently empty
 ```
 
 The backend and frontend are independent applications that happen to share a repository — see [INSTALLATION.md](INSTALLATION.md#repository-setup) for the full breakdown.

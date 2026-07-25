@@ -74,4 +74,5 @@ All notable changes to this project are documented in this file. The format foll
 
 This is the first public release of GateKeeper, representing the completed MVP as scoped in `docs/Product-Vision.md`. Further work will be tracked as subsequent releases rather than added retroactively to this one.
 
+[Unreleased]: https://github.com/arcinth/gatekeeper-core/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/arcinth/gatekeeper-core/releases/tag/v1.0.0

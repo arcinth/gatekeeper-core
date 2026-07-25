@@ -202,4 +202,3 @@ Future Scope epics (10–13) remain in the icebox and are not assigned to a spri
 
 - All epics, features, and priorities above are derived directly from the **MVP Scope**, **MVP Features**, **Future Scope**, **Goals**, and **Target Users** sections of the approved Product Vision.
 - No product capability outside the Product Vision has been introduced in this backlog.
-- This backlog should be revisited once `Requirements.md` and `Architecture.md` are finalized, as those documents may refine story-level detail without changing the epics defined here.

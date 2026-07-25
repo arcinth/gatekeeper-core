@@ -126,7 +126,7 @@ No `POST`: GitHub App installation is the only supported way a repository enters
 
 ## GitHub Installations API
 
-Visibility into GitHub App installations and the URL that starts GitHub's own "install this App" flow (Milestone 8: Repository Onboarding). This is the API surface behind the Repositories page's "GitHub Connections" section - see [GitHub-Integration-Architecture-Review.md](./GitHub-Integration-Architecture-Review.md) for how this fits into the wider GitHub integration.
+Visibility into GitHub App installations and the URL that starts GitHub's own "install this App" flow (Milestone 8: Repository Onboarding). This is the API surface behind the Repositories page's "GitHub Connections" section - see [Architecture.md](./Architecture.md) for how this fits into the wider GitHub integration.
 
 ### Endpoints
 

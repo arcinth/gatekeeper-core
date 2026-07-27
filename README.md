@@ -42,21 +42,59 @@ The rest of the system follows from that split: every pull request commit is tra
 
 ---
 
-## Architecture
+## System Architecture
 
 The backend is a single Spring Boot application organized by feature — `analysisrun`, `policy`, `security`, `user`, and so on — each owning its own entity, repository, service, and controller, rather than a cross-cutting `controllers/`/`services/`/`repositories/` split. Coordinating a single Analysis Run across the Policy, Security, and AI Review engines is handled by a dedicated `orchestration` package, not by any one feature's service.
 
 The frontend is an independent React SPA that talks to the backend only through its REST API. The two applications share a repository but not a runtime.
 
-*Architecture diagram — to be added.*
+![System Architecture](docs/images/architecture/system-architecture.png)
 
 See [docs/Architecture.md](docs/Architecture.md) for module boundaries and the reasoning behind them, including why the Verdict Engine is structurally unable to read AI Review findings.
 
 ---
 
-## Screenshots
+## Pull Request Review Flow
 
-*Screenshots of the dashboard, a pull request's Engineering Report, and the security triage queue will be added here.*
+Ingesting a webhook (verification, repository lookup, Analysis Run creation) is a separate step from executing the pipeline. Once an Analysis Run is queued, the deterministic Policy/Security pipeline and the AI review run as independent event-driven consumers — not a sequential chain — and converge only when the verdict, the Engineering Report, and the GitHub Check Run are published.
+
+![Pull Request Review Flow](docs/images/architecture/pull-request-review-flow.png)
+
+---
+
+## Authentication & Authorization Flow
+
+JWT-based authentication with access and refresh tokens, backed by permission-based authorization: controllers are annotated against a fixed set of `Permission` values, never role names directly, and each role resolves to a set of permissions in exactly one place.
+
+![Authentication & Authorization Flow](docs/images/architecture/authentication-flow.png)
+
+---
+
+## Application Screenshots
+
+**Sign in**
+
+![Sign in](docs/images/screenshots/login.png)
+
+**Inbox** — pull requests needing attention and critical findings, at a glance.
+
+![Inbox](docs/images/screenshots/dashboard.png)
+
+**Repositories** — GitHub connections and the repositories GateKeeper governs.
+
+![Repositories](docs/images/screenshots/repositories.png)
+
+**Pull Requests** — every pull request GateKeeper is tracking, filterable by status.
+
+![Pull Requests](docs/images/screenshots/pull-request-review.png)
+
+**Engineering Report** — the verdict, its rationale, and the underlying findings for a single pull request.
+
+![Engineering Report](docs/images/screenshots/engineering-report.png)
+
+**On GitHub** — the pull request as seen on GitHub, connected through GateKeeper's GitHub App.
+
+![Pull request on GitHub](docs/images/screenshots/github-check-run.png)
 
 ---
 

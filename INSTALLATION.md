@@ -18,7 +18,7 @@ You do not need to install Maven separately. The repository ships the Maven Wrap
 ## Repository Setup
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/arcinth/gatekeeper-core.git
 cd gatekeeper-core
 ```
 
@@ -257,7 +257,7 @@ Swagger UI and the OpenAPI JSON endpoint are available under `local` and `dev`. 
 
 Note that the health check runs on port **8081**, not 8080 — Actuator (health, metrics, info, prometheus, startup) is served on its own management port, entirely separate from the API port. See [docs/Observability.md](docs/Observability.md) for the full reference and why.
 
-Sign in with the bootstrap administrator credentials described above. The frontend redirects to `/dashboard` after a successful login.
+Sign in with the bootstrap administrator credentials described above. The frontend redirects to `/inbox` after a successful login.
 
 ## Running Tests
 

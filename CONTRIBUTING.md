@@ -23,6 +23,7 @@ backend/                 Spring Boot API (Java 21, Maven)
 frontend/                React + TypeScript SPA (Vite)
 docs/                    Product vision, architecture, domain model, and API design documents
 scripts/                 Local dev scripts - start-dev/stop-dev (.ps1/.sh/.bat) and the dev-all.mjs dispatcher
+secrets/                 Local-only credential material (GitHub App private key) - gitignored
 docker-compose.yml       PostgreSQL, and an optional containerized backend
 infrastructure/          Reserved for infrastructure-as-code; currently empty
 ```

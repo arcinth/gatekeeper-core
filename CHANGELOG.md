@@ -12,6 +12,10 @@ All notable changes to this project are documented in this file. The format foll
 - Disabled the OWASP Dependency-Check plugin's secondary Sonatype OSS Index analyzer, which shares a low-volume anonymous rate limit across the whole CI runner fleet and could hard-fail the build with an unrelated 401 rather than a real finding; the NVD-backed CVSS ≥ 7 policy (this project's actual security gate) is unaffected.
 - Replaced the frontend's `react-router-dom` 7.18.1 dependency with `react-router` 8.3.0, resolving [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2) (high severity, RSC-mode CSRF bypass). `react-router-dom` was discontinued outright in the v8 release with no patched version ever published for it — every named export this app uses (`BrowserRouter`, `Link`, `NavLink`, `Navigate`, `Route`, `Routes`, `useLocation`, `useNavigate`, `useParams`, `useSearchParams`) is re-exported unchanged from the successor `react-router` package, so the fix is a source-only import path swap with no behavior change. CI's Node version is bumped 20 → 22 to satisfy `react-router` 8's `engines` requirement (Node ≥ 22.22.0); Node 20 was also already past its own maintenance-LTS end-of-life.
 
+### Documentation
+
+- README.md: embedded the system architecture, pull request review flow, and authentication/authorization diagrams (`docs/images/architecture/`), and an Application Screenshots section (`docs/images/screenshots/`), replacing the earlier placeholder text for both.
+
 ## [1.0.0] - 2026-07-24
 
 ### Added

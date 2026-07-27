@@ -16,19 +16,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * multicaster, so delegating to a different bean's {@code @Transactional}
  * method here is a normal, safe proxy call, not self-invocation.
  * <p>
- * <b>{@code @Async} is required for correctness here, not an optimization</b>
- * (see {@link GitHubCheckRunPublisher}'s Javadoc for the full mechanism):
- * {@code @TransactionalEventListener(phase = AFTER_COMMIT)} callbacks run
- * before the committing transaction's {@code EntityManagerHolder} is unbound
- * from {@code TransactionSynchronizationManager}. Running synchronously here
- * (as this class previously did) meant {@code ReportPublicationService}'s own
- * {@code @Transactional} methods silently joined that already-committed,
- * about-to-be-cleaned-up transaction instead of opening a real one - Spring
- * treats a joined transaction's "commit" as a no-op, so
- * {@code EngineeringReport}/{@code AuditLog} rows were persisted into a
- * transaction that never actually committed them, with no exception anywhere.
- * {@code @Async} switches to a fresh thread with no stale resource bound,
- * guaranteeing a genuinely new, committing transaction.
+ * <b>{@code @Async} is required for correctness here, not an optimization</b> -
+ * see {@link GitHubCheckRunPublisher#onVerdictProduced}'s Javadoc for the full
+ * mechanism. This class ran synchronously until that same silent-transaction-join
+ * bug was found here first: {@code EngineeringReport}/{@code AuditLog} rows were
+ * being persisted into an already-committed transaction whose "commit" was a
+ * no-op, with no exception anywhere.
  * <p>
  * <b>Every exception from ReportPublicationService is caught here, not
  * propagated.</b> An {@code @Async} method has no synchronous caller to

@@ -16,6 +16,11 @@ All notable changes to this project are documented in this file. The format foll
 
 - README.md: embedded the system architecture, pull request review flow, and authentication/authorization diagrams (`docs/images/architecture/`), and an Application Screenshots section (`docs/images/screenshots/`), replacing the earlier placeholder text for both.
 
+### Changed
+
+- Removed `frontend/README.md` (the unmodified Vite scaffold template, never customized for this project) and `docs/Decisions.md` (tracked but empty since the initial commit, unreferenced from any other document).
+- Removed two unused Mockito static imports (`AIReviewRunQueryServiceTest`, `GitHubInstallationControllerTest`) and trimmed a duplicated explanation in `ReportGenerationListener`'s Javadoc that had grown to restate `GitHubCheckRunPublisher`'s own documented reasoning in full instead of referencing it.
+
 ## [1.0.0] - 2026-07-24
 
 ### Added
